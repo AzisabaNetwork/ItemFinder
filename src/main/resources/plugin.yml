@@ -1,0 +1,9 @@
+name: ItemFinder
+main: net.azisaba.itemFinder.ItemFinder
+version: 1.0.0
+commands:
+  itemfinder:
+    permission: itemfinder.command
+permissions:
+  itemfinder.notify:
+    default: op
