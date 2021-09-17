@@ -21,10 +21,11 @@ import org.bukkit.inventory.meta.BlockStateMeta
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import kotlin.math.min
 
 object ScanChunkListener: Listener {
     var enabled = false
-    val chunkScannerExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2)!!
+    val chunkScannerExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 4)!!
 
     @EventHandler
     fun onChunkLoad(e: ChunkLoadEvent) {
@@ -34,7 +35,7 @@ object ScanChunkListener: Listener {
 
     fun checkChunkAsync(chunk: Chunk, andThen: () -> Unit = {}): Future<*> {
         if (ItemFinder.seen.getOrPut(chunk.world.name) { mutableListOf() }.contains(chunk.x to chunk.z)) CompletableFuture.completedFuture(null)
-        val wasLoaded = chunk.isLoaded;
+        val wasLoaded = chunk.isLoaded
         val snapshot = {
             if (!wasLoaded) chunk.load()
             val snapshot = chunk.getChunkSnapshot(true, false, false)
@@ -43,7 +44,7 @@ object ScanChunkListener: Listener {
         }.runOnMain().complete()
         return chunkScannerExecutor.submit {
             try {
-                checkChunk(snapshot)
+                { checkChunk(snapshot) }.runOnMain().complete()
                 andThen()
             } catch (e: Exception) {
                 ItemFinder.instance.logger.warning("Could not check chunk ${chunk.x to chunk.z}")
@@ -57,7 +58,8 @@ object ScanChunkListener: Listener {
         ItemFinder.seen[snapshot.worldName]!!.add(snapshot.x to snapshot.z)
         for (x in 0..15) {
             for (z in 0..15) {
-                val maxY = snapshot.getHighestBlockYAt(x, z)
+                // cap at 255, for now
+                val maxY = min(255, snapshot.getHighestBlockYAt(x, z))
                 for (y in 0..maxY) {
                     val data = snapshot.getBlockData(x, y, z)
                     if (

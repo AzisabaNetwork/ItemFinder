@@ -9,6 +9,7 @@ import org.bukkit.block.BlockState
 import org.bukkit.inventory.ItemStack
 import util.promise.rewrite.Promise
 import util.reflect.Reflect
+import kotlin.math.roundToInt
 
 object Util {
     private val serverVersion =
@@ -68,4 +69,6 @@ object Util {
     }
 
     infix fun String?.or(another: String) = if (this.isNullOrBlank()) another else this
+
+    fun Double.wellRound() = (this * 100.0).roundToInt() / 100.0
 }
