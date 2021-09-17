@@ -33,9 +33,14 @@ object ScanChunkListener: Listener {
     }
 
     fun checkChunkAsync(chunk: Chunk, andThen: () -> Unit = {}): Future<*> {
-        if (!chunk.isLoaded) return CompletableFuture.completedFuture(null)
         if (ItemFinder.seen.getOrPut(chunk.world.name) { mutableListOf() }.contains(chunk.x to chunk.z)) CompletableFuture.completedFuture(null)
-        val snapshot = chunk.getChunkSnapshot(true, false, false)
+        val wasLoaded = chunk.isLoaded;
+        val snapshot = {
+            if (!wasLoaded) chunk.load()
+            val snapshot = chunk.getChunkSnapshot(true, false, false)
+            if (!wasLoaded) chunk.unload()
+            snapshot
+        }.runOnMain().complete()
         return chunkScannerExecutor.submit {
             try {
                 checkChunk(snapshot)
