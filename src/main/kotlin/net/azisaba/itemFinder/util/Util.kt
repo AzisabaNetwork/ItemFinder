@@ -1,14 +1,19 @@
 package net.azisaba.itemFinder.util
 
 import net.azisaba.itemFinder.ItemFinder
+import net.azisaba.itemFinder.util.Util.getMinecraftId
+import net.azisaba.itemFinder.util.Util.getTagAsString
+import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.HoverEvent
 import net.md_5.bungee.api.chat.TextComponent
 import org.bukkit.Bukkit
 import org.bukkit.ChunkSnapshot
 import org.bukkit.block.BlockState
 import org.bukkit.inventory.ItemStack
+import util.ReflectionHelper
 import util.promise.rewrite.Promise
 import util.reflect.Reflect
+import java.util.Base64
 import kotlin.math.roundToInt
 
 object Util {
@@ -31,10 +36,14 @@ object Util {
 
     private fun getNMSClass(clazz: NMSClass): Class<*> = Class.forName(when (clazz) {
         NMSClass.NBTTagCompound -> n("net.minecraft.server.$serverVersion.NBTTagCompound", "net.minecraft.nbt.NBTTagCompound")
+        NMSClass.IRegistry -> n("net.minecraft.server.$serverVersion.IRegistry", "net.minecraft.core.IRegistry")
+        NMSClass.RegistryBlocks -> n("net.minecraft.server.$serverVersion.RegistryBlocks", "net.minecraft.core.RegistryBlocks")
     })
 
     enum class NMSClass {
         NBTTagCompound,
+        IRegistry,
+        RegistryBlocks,
     }
 
     private fun Any.reflect() = Reflect.on(this)
@@ -54,6 +63,25 @@ object Util {
             )
         )
 
+    fun ItemStack.toClickEvent(name: String = "@s") =
+        ClickEvent(
+            ClickEvent.Action.RUN_COMMAND,
+            "/itemfinder give ${"$name ${getMinecraftId()}${getTagAsString()} 1".encodeBase64()}",
+        )
+
+    fun ItemStack.toGiveCommand(name: String = "@s") = "/minecraft:give $name ${getMinecraftId()}${getTagAsString()} 1"
+
+    fun ItemStack.getMinecraftId(): String {
+        val itemField = getNMSClass(NMSClass.IRegistry).getField("ITEM").get(null)
+        return getNMSClass(NMSClass.RegistryBlocks)
+            .getMethod("getKey", Object::class.java)
+            .invoke(itemField, this.toNMS().reflect().call<Any>("getItem").get())
+            .toString()
+    }
+
+    fun ItemStack.getTagAsString(): String =
+        this.toNMS().reflect().call<Any>("getTag").get().let { it?.toString() ?: "" }
+
     fun <R> (() -> R).runOnMain(): Promise<R> {
         if (Bukkit.isPrimaryThread()) return Promise.resolve(this())
         return Promise.create { context ->
@@ -71,4 +99,7 @@ object Util {
     infix fun String?.or(another: String) = if (this.isNullOrBlank()) another else this
 
     fun Double.wellRound() = (this * 100.0).roundToInt() / 100.0
+
+    fun String.encodeBase64() = Base64.getEncoder().encodeToString(this.toByteArray())
+    fun String.decodeBase64() = String(Base64.getDecoder().decode(this))
 }

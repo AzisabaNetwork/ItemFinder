@@ -1,8 +1,10 @@
 package net.azisaba.itemFinder
 
 import net.azisaba.itemFinder.listener.ScanChunkListener
+import net.azisaba.itemFinder.util.Util.or
 import net.azisaba.itemFinder.util.Util.toHoverEvent
 import net.azisaba.itemFinder.util.Util.wellRound
+import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.TextComponent
 import org.bukkit.ChatColor
 import org.bukkit.command.Command
@@ -12,9 +14,10 @@ import org.bukkit.entity.Player
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.max
 
 object ItemFinderCommand: TabExecutor {
-    private val commands = listOf("on", "off", "add", "remove", "removeall", "clearlogs", "scanall", "scanhere", "info", "reload")
+    private val commands = listOf("on", "off", "add", "remove", "removeall", "clearlogs", "scanall", "scanhere", "info", "reload", "list")
     private val scanStatus = mutableMapOf<String, Pair<Int, AtomicInteger>>()
 
     // 1-64, 1C(1728), 1LC(3456), 1C(1728)*1C(27), 1C(1728)*1LC(64)
@@ -25,7 +28,7 @@ object ItemFinderCommand: TabExecutor {
 
     override fun onCommand(sender: CommandSender, command: Command, s: String, args: Array<String>): Boolean {
         if (args.isEmpty()) {
-            sender.sendMessage("${ChatColor.RED}/itemfinder <on|off|add|remove|removeall|clearlogs|scanall|scanhere|info>")
+            sender.sendMessage("${ChatColor.RED}/itemfinder <on|off|add|remove|removeall|clearlogs|scanall|scanhere|info|list>")
             return true
         }
         when (args[0]) {
@@ -134,9 +137,28 @@ object ItemFinderCommand: TabExecutor {
                     sender.sendMessage("${ChatColor.GREEN}ワールド '${ChatColor.RED}${sender.world.name}${ChatColor.GREEN}' 内の読み込まれているチャンク数: ${ChatColor.RED}${sender.world.loadedChunks.size}")
                 }
             }
+            "list" -> {
+                val page = max(args.getOrNull(1)?.toIntOrNull() ?: 1, 1)
+                val minIndex = 15 * (page - 1)
+                val maxIndex = 15 * page
+                sender.sendMessage("${ChatColor.GOLD}スキャン対象のアイテム ($page):")
+                ItemFinder.itemsToFind.forEachIndexed { index, itemStack ->
+                    if (index in minIndex until maxIndex) {
+                        val text = TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}${itemStack.itemMeta?.displayName or itemStack.type.name}${ChatColor.GOLD}]${ChatColor.YELLOW}x${itemStack.amount}")
+                        text.hoverEvent = itemStack.toHoverEvent()
+                        if (sender is Player) text.clickEvent = ClickEvent(ClickEvent.Action.RUN_COMMAND, "/itemfinder give $index")
+                        sender.spigot().sendMessage(text)
+                    }
+                }
+            }
             "reload" -> {
                 ItemFinder.instance.config.load(File("./plugins/ItemFinder/config.yml"))
                 sender.sendMessage("${ChatColor.GREEN}設定を再読み込みしました。")
+            }
+            "give" -> {
+                if (sender !is Player) return true
+                val i = args.getOrNull(1)?.toIntOrNull() ?: return true
+                ItemFinder.itemsToFind.getOrNull(i)?.let { sender.inventory.addItem(it.clone().apply { amount = 1 }) }
             }
         }
         return true
