@@ -68,6 +68,8 @@ object ScanChunkListener: Listener {
                         && !data::class.java.name.contains("Barrel")
                         && !data::class.java.name.contains("Furnace") // BlastFurnace
                         && !data::class.java.name.contains("Hopper")
+                        && !data::class.java.name.contains("Dropper")
+                        && !data::class.java.name.contains("Dispenser")
                     ) continue
                     val state = snapshot.getBlockState(x, y, z).complete()
                     if (state !is InventoryHolder) continue
