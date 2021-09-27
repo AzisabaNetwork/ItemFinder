@@ -12,6 +12,7 @@ import org.bukkit.Bukkit
 import org.bukkit.ChatColor
 import org.bukkit.Chunk
 import org.bukkit.ChunkSnapshot
+import org.bukkit.entity.EntityType
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.world.ChunkLoadEvent
@@ -29,6 +30,11 @@ object ScanChunkListener: Listener {
 
     @EventHandler
     fun onChunkLoad(e: ChunkLoadEvent) {
+        if (ItemFinder.instance.config.getBoolean("removeItem", false) && !ItemFinder.seen.getOrPut(e.chunk.world.name) { mutableListOf() }.contains(e.chunk.x to e.chunk.z)) {
+            e.chunk.entities.forEach { entity ->
+                if (entity.type == EntityType.DROPPED_ITEM) entity.remove()
+            }
+        }
         if (!enabled || e.isNewChunk) return
         checkChunkAsync(e.chunk)
     }
