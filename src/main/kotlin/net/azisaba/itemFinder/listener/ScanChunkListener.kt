@@ -13,23 +13,31 @@ import org.bukkit.Bukkit
 import org.bukkit.ChatColor
 import org.bukkit.Chunk
 import org.bukkit.ChunkSnapshot
+import org.bukkit.Location
 import org.bukkit.entity.EntityType
+import org.bukkit.entity.ItemFrame
+import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.world.ChunkLoadEvent
 import org.bukkit.inventory.InventoryHolder
+import org.bukkit.inventory.ItemStack
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import kotlin.math.min
 
-object ScanChunkListener: Listener {
+object ScanChunkListener : Listener {
     var enabled = false
     val chunkScannerExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 4)!!
 
     @EventHandler
     fun onChunkLoad(e: ChunkLoadEvent) {
-        if (ItemFinder.instance.config.getBoolean("removeItem", false) && !ItemFinder.seen.getOrPut(e.chunk.world.name) { mutableListOf() }.contains(e.chunk.x to e.chunk.z)) {
+        if (ItemFinder.instance.config.getBoolean(
+                "removeItem",
+                false
+            ) && !ItemFinder.seen.getOrPut(e.chunk.world.name) { mutableListOf() }.contains(e.chunk.x to e.chunk.z)
+        ) {
             e.chunk.entities.forEach { entity ->
                 if (entity.type == EntityType.DROPPED_ITEM) entity.remove()
             }
@@ -39,10 +47,45 @@ object ScanChunkListener: Listener {
     }
 
     fun checkChunkAsync(chunk: Chunk, andThen: () -> Unit = {}): Future<*> {
-        if (ItemFinder.seen.getOrPut(chunk.world.name) { mutableListOf() }.contains(chunk.x to chunk.z)) CompletableFuture.completedFuture(null)
+        if (ItemFinder.seen.getOrPut(chunk.world.name) { mutableListOf() }
+                .contains(chunk.x to chunk.z)) CompletableFuture.completedFuture(null)
         val wasLoaded = chunk.isLoaded
+
+        @Suppress("UNNECESSARY_SAFE_CALL")
         val snapshot = {
             if (!wasLoaded) chunk.load()
+            val check: (map: Map<ItemStack, Int>, loc: Location) -> Unit = { map, loc ->
+                ItemFinder.itemsToFind.forEach { itemStack ->
+                    val amount = map.filter { it.key.isSimilar(itemStack) }.entries.firstOrNull()?.value ?: 0
+                    if (amount >= itemStack.amount) {
+                        val x = loc.blockX
+                        val y = loc.blockY
+                        val z = loc.blockZ
+                        val text = TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}${itemStack.itemMeta?.displayName or itemStack.type.name}${ChatColor.GOLD}]${ChatColor.YELLOW}x${amount} ${ChatColor.GOLD}が以下の座標から見つかりました:")
+                        text.hoverEvent = itemStack.toHoverEvent()
+                        val posText =
+                            TextComponent("  ${ChatColor.GREEN}X: ${ChatColor.GOLD}$x, ${ChatColor.GREEN}Y: ${ChatColor.GOLD}$y, ${ChatColor.GREEN}Z: ${ChatColor.GOLD}$z")
+                        posText.hoverEvent =
+                            HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.fromLegacyText("クリックでテレポート"))
+                        posText.clickEvent =
+                            ClickEvent(ClickEvent.Action.RUN_COMMAND, "/tppos $x $y $z 0 0 ${chunk.world.name}")
+                        Bukkit.getOnlinePlayers().filter { it.hasPermission("itemfinder.notify") }.forEach { p ->
+                            p.spigot().sendMessage(text)
+                            p.spigot().sendMessage(posText)
+                        }
+                        Bukkit.getConsoleSender().let { console ->
+                            console.spigot().sendMessage(text)
+                            console.spigot().sendMessage(posText)
+                        }
+                    }
+                }
+            }
+            chunk.entities.filter { it is InventoryHolder && it !is Player }.forEach {
+                check((it as InventoryHolder).check(), it.location)
+            }
+            chunk.entities.filterIsInstance<ItemFrame>().forEach { itemFrame ->
+                check(itemFrame.item.check(), itemFrame.location)
+            }
             val snapshot = chunk.getChunkSnapshot(true, false, false)
             if (!wasLoaded) chunk.unload()
             snapshot
@@ -85,11 +128,17 @@ object ScanChunkListener: Listener {
                         if (amount >= itemStack.amount) {
                             val absX = snapshot.x * 16 + x
                             val absZ = snapshot.z * 16 + z
-                            val text = TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}${itemStack.itemMeta?.displayName or itemStack.type.name}${ChatColor.GOLD}]${ChatColor.YELLOW}x${amount} ${ChatColor.GOLD}が以下の座標から見つかりました:")
+                            val text =
+                                TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}${itemStack.itemMeta?.displayName or itemStack.type.name}${ChatColor.GOLD}]${ChatColor.YELLOW}x${amount} ${ChatColor.GOLD}が以下の座標から見つかりました:")
                             text.hoverEvent = itemStack.toHoverEvent()
-                            val posText = TextComponent("  ${ChatColor.GREEN}X: ${ChatColor.GOLD}$absX, ${ChatColor.GREEN}Y: ${ChatColor.GOLD}$y, ${ChatColor.GREEN}Z: ${ChatColor.GOLD}$absZ")
-                            posText.hoverEvent = HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.fromLegacyText("クリックでテレポート"))
-                            posText.clickEvent = ClickEvent(ClickEvent.Action.RUN_COMMAND, "/tppos $absX $y $absZ 0 0 ${snapshot.worldName}")
+                            val posText =
+                                TextComponent("  ${ChatColor.GREEN}X: ${ChatColor.GOLD}$absX, ${ChatColor.GREEN}Y: ${ChatColor.GOLD}$y, ${ChatColor.GREEN}Z: ${ChatColor.GOLD}$absZ")
+                            posText.hoverEvent =
+                                HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.fromLegacyText("クリックでテレポート"))
+                            posText.clickEvent = ClickEvent(
+                                ClickEvent.Action.RUN_COMMAND,
+                                "/tppos $absX $y $absZ 0 0 ${snapshot.worldName}"
+                            )
                             Bukkit.getOnlinePlayers().filter { it.hasPermission("itemfinder.notify") }.forEach { p ->
                                 p.spigot().sendMessage(text)
                                 p.spigot().sendMessage(posText)

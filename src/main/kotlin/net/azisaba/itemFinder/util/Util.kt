@@ -1,8 +1,6 @@
 package net.azisaba.itemFinder.util
 
 import net.azisaba.itemFinder.ItemFinder
-import net.azisaba.itemFinder.util.Util.getMinecraftId
-import net.azisaba.itemFinder.util.Util.getTagAsString
 import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.HoverEvent
 import net.md_5.bungee.api.chat.TextComponent
@@ -13,7 +11,6 @@ import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.InventoryHolder
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.BlockStateMeta
-import util.ReflectionHelper
 import util.promise.rewrite.Promise
 import util.reflect.Reflect
 import java.util.Base64
@@ -112,15 +109,23 @@ object Util {
         val map = mutableMapOf<ItemStack, Int>()
         val items = { this.contents }.runOnMain().complete()
         items.forEach { itemStack ->
-            @Suppress("SENSELESS_COMPARISON") // it's actually nullable, wtf
-            if (itemStack == null) return@forEach
-            map.merge(itemStack.clone().apply { amount = 1 }, itemStack.amount, Integer::sum)
-            itemStack.itemMeta?.let {
-                if (it is BlockStateMeta && it.hasBlockState()) {
-                    it.blockState.let { bs ->
-                        if (bs is InventoryHolder) {
-                            bs.check().forEach { (t, u) -> map.merge(t, u * itemStack.amount, Integer::sum) }
-                        }
+            @Suppress("UNNECESSARY_SAFE_CALL")
+            itemStack?.check()?.forEach { (k, v) ->
+                map.merge(k, v, Integer::sum)
+            }
+        }
+        return map
+    }
+
+    fun ItemStack?.check(): Map<ItemStack, Int> {
+        if (this == null) return emptyMap()
+        val map = mutableMapOf<ItemStack, Int>()
+        map.merge(this.clone().apply { amount = 1 }, this.amount, Integer::sum)
+        this.itemMeta?.let {
+            if (it is BlockStateMeta && it.hasBlockState()) {
+                it.blockState.let { bs ->
+                    if (bs is InventoryHolder) {
+                        bs.check().forEach { (t, u) -> map.merge(t, u * this.amount, Integer::sum) }
                     }
                 }
             }
