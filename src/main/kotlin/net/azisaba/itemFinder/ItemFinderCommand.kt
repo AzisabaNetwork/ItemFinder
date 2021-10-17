@@ -1,6 +1,7 @@
 package net.azisaba.itemFinder
 
 import net.azisaba.itemFinder.listener.ScanChunkListener
+import net.azisaba.itemFinder.listener.ScanPlayerListener
 import net.azisaba.itemFinder.util.Util.or
 import net.azisaba.itemFinder.util.Util.toHoverEvent
 import net.azisaba.itemFinder.util.Util.wellRound
@@ -17,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 
 object ItemFinderCommand: TabExecutor {
-    private val commands = listOf("on", "off", "add", "remove", "removeall", "clearlogs", "scanall", "scanhere", "info", "reload", "list")
+    private val commands = listOf("on", "off", "onPlayer", "offPlayer", "add", "remove", "removeall", "clearlogs", "scanall", "scanhere", "info", "reload", "list")
     private val scanStatus = mutableMapOf<String, Pair<Int, AtomicInteger>>()
 
     // 1-64, 1C(1728), 1LC(3456), 1C(1728)*1C(27), 1C(1728)*1LC(64)
@@ -28,10 +29,10 @@ object ItemFinderCommand: TabExecutor {
 
     override fun onCommand(sender: CommandSender, command: Command, s: String, args: Array<String>): Boolean {
         if (args.isEmpty()) {
-            sender.sendMessage("${ChatColor.RED}/itemfinder <on|off|add|remove|removeall|clearlogs|scanall|scanhere|info|list>")
+            sender.sendMessage("${ChatColor.RED}/itemfinder <on|off|onPlayer|offPlayer|add|remove|removeall|clearlogs|scanall|scanhere|info|list>")
             return true
         }
-        when (args[0]) {
+        when (args[0].lowercase()) {
             "off" -> {
                 ScanChunkListener.enabled = false
                 sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンをオフにしました。")
@@ -39,6 +40,14 @@ object ItemFinderCommand: TabExecutor {
             "on" -> {
                 ScanChunkListener.enabled = true
                 sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンをオンにしました。")
+            }
+            "offplayer" -> {
+                ScanPlayerListener.enabled = false
+                sender.sendMessage("${ChatColor.GREEN}プレイヤーのスキャンをオフにしました。")
+            }
+            "onplayer" -> {
+                ScanPlayerListener.enabled = true
+                sender.sendMessage("${ChatColor.GREEN}プレイヤーのスキャンをオンにしました。")
             }
             "add" -> {
                 if (sender !is Player) {

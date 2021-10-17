@@ -1,6 +1,7 @@
 package net.azisaba.itemFinder
 
 import net.azisaba.itemFinder.listener.ScanChunkListener
+import net.azisaba.itemFinder.listener.ScanPlayerListener
 import net.azisaba.itemFinder.util.Util
 import org.bukkit.configuration.ConfigurationSection
 import org.bukkit.inventory.ItemStack
@@ -25,6 +26,7 @@ class ItemFinder: JavaPlugin() {
         server.getPluginCommand("itemfinder")!!.setExecutor(ItemFinderCommand)
         server.getPluginCommand("itemfinder")!!.tabCompleter = ItemFinderCommand
         server.pluginManager.registerEvents(ScanChunkListener, this)
+        server.pluginManager.registerEvents(ScanPlayerListener, this)
         config.getList("itemsToFind")?.forEach { any ->
             when (any) {
                 is ItemStack -> itemsToFind.add(any)

@@ -9,7 +9,10 @@ import net.md_5.bungee.api.chat.TextComponent
 import org.bukkit.Bukkit
 import org.bukkit.ChunkSnapshot
 import org.bukkit.block.BlockState
+import org.bukkit.inventory.Inventory
+import org.bukkit.inventory.InventoryHolder
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.meta.BlockStateMeta
 import util.ReflectionHelper
 import util.promise.rewrite.Promise
 import util.reflect.Reflect
@@ -102,4 +105,26 @@ object Util {
 
     fun String.encodeBase64() = Base64.getEncoder().encodeToString(this.toByteArray())
     fun String.decodeBase64() = String(Base64.getDecoder().decode(this))
+
+    fun InventoryHolder.check() = this.inventory.check()
+
+    fun Inventory.check(): Map<ItemStack, Int> {
+        val map = mutableMapOf<ItemStack, Int>()
+        val items = { this.contents }.runOnMain().complete()
+        items.forEach { itemStack ->
+            @Suppress("SENSELESS_COMPARISON") // it's actually nullable, wtf
+            if (itemStack == null) return@forEach
+            map.merge(itemStack.clone().apply { amount = 1 }, itemStack.amount, Integer::sum)
+            itemStack.itemMeta?.let {
+                if (it is BlockStateMeta && it.hasBlockState()) {
+                    it.blockState.let { bs ->
+                        if (bs is InventoryHolder) {
+                            bs.check().forEach { (t, u) -> map.merge(t, u * itemStack.amount, Integer::sum) }
+                        }
+                    }
+                }
+            }
+        }
+        return map
+    }
 }

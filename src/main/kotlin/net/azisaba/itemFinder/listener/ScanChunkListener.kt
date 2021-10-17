@@ -1,6 +1,7 @@
 package net.azisaba.itemFinder.listener
 
 import net.azisaba.itemFinder.ItemFinder
+import net.azisaba.itemFinder.util.Util.check
 import net.azisaba.itemFinder.util.Util.getBlockState
 import net.azisaba.itemFinder.util.Util.or
 import net.azisaba.itemFinder.util.Util.runOnMain
@@ -17,8 +18,6 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.world.ChunkLoadEvent
 import org.bukkit.inventory.InventoryHolder
-import org.bukkit.inventory.ItemStack
-import org.bukkit.inventory.meta.BlockStateMeta
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
@@ -104,25 +103,5 @@ object ScanChunkListener: Listener {
                 }
             }
         }
-    }
-
-    private fun InventoryHolder.check(): Map<ItemStack, Int> {
-        val map = mutableMapOf<ItemStack, Int>()
-        val items = { this.inventory.contents }.runOnMain().complete()
-        items.forEach { itemStack ->
-            @Suppress("SENSELESS_COMPARISON") // it's actually nullable, wtf
-            if (itemStack == null) return@forEach
-            map.merge(itemStack.clone().apply { amount = 1 }, itemStack.amount, Integer::sum)
-            itemStack.itemMeta?.let {
-                if (it is BlockStateMeta && it.hasBlockState()) {
-                    it.blockState.let { bs ->
-                        if (bs is InventoryHolder) {
-                            bs.check().forEach { (t, u) -> map.merge(t, u * itemStack.amount, Integer::sum) }
-                        }
-                    }
-                }
-            }
-        }
-        return map
     }
 }
