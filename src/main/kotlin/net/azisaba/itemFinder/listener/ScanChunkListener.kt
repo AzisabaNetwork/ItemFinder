@@ -14,6 +14,7 @@ import org.bukkit.ChatColor
 import org.bukkit.Chunk
 import org.bukkit.ChunkSnapshot
 import org.bukkit.Location
+import org.bukkit.attribute.Attribute
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.ItemFrame
 import org.bukkit.entity.Player
@@ -147,6 +148,30 @@ object ScanChunkListener : Listener {
                                 console.spigot().sendMessage(text)
                                 console.spigot().sendMessage(posText)
                             }
+                        }
+                    }
+                    // TODO: remove when unneeded
+                    val amount = map.filter { it.key.itemMeta?.attributeModifiers?.get(Attribute.GENERIC_LUCK)?.any { mod -> mod.amount > 100.0 } == true }.entries.firstOrNull()?.value ?: 0
+                    if (amount >= 1) {
+                        val absX = snapshot.x * 16 + x
+                        val absZ = snapshot.z * 16 + z
+                        val text =
+                            TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}Luck >= 100のやつ${ChatColor.GOLD}]${ChatColor.YELLOW}x${amount} ${ChatColor.GOLD}が以下の座標から見つかりました:")
+                        val posText =
+                            TextComponent("  ${ChatColor.GREEN}X: ${ChatColor.GOLD}$absX, ${ChatColor.GREEN}Y: ${ChatColor.GOLD}$y, ${ChatColor.GREEN}Z: ${ChatColor.GOLD}$absZ")
+                        posText.hoverEvent =
+                            HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.fromLegacyText("クリックでテレポート"))
+                        posText.clickEvent = ClickEvent(
+                            ClickEvent.Action.RUN_COMMAND,
+                            "/tppos $absX $y $absZ 0 0 ${snapshot.worldName}"
+                        )
+                        Bukkit.getOnlinePlayers().filter { it.hasPermission("itemfinder.notify") }.forEach { p ->
+                            p.spigot().sendMessage(text)
+                            p.spigot().sendMessage(posText)
+                        }
+                        Bukkit.getConsoleSender().let { console ->
+                            console.spigot().sendMessage(text)
+                            console.spigot().sendMessage(posText)
                         }
                     }
                 }

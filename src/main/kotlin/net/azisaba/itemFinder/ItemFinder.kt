@@ -77,9 +77,8 @@ class ItemFinder: JavaPlugin() {
         logger.info("Shutting down chunk scanner executor")
         ScanChunkListener.chunkScannerExecutor.shutdownNow()
         logger.info("Saving config")
-        File("./plugins/ItemFinder").mkdirs()
         config.set("itemsToFind", itemsToFind)
         config.set("seen", seen.mapValues { (_, v) -> v.map { (i, j) -> "${i},${j}" } })
-        config.save(File("./plugins/ItemFinder/config.yml"))
+        saveConfig()
     }
 }

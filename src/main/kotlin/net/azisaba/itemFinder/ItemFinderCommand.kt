@@ -7,6 +7,7 @@ import net.azisaba.itemFinder.util.Util.toHoverEvent
 import net.azisaba.itemFinder.util.Util.wellRound
 import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.TextComponent
+import org.bukkit.Bukkit
 import org.bukkit.ChatColor
 import org.bukkit.command.Command
 import org.bukkit.command.CommandSender
@@ -18,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 
 object ItemFinderCommand: TabExecutor {
-    private val commands = listOf("on", "off", "onPlayer", "offPlayer", "add", "remove", "removeall", "clearlogs", "scanall", "scanhere", "info", "reload", "list")
+    private val commands = listOf("on", "off", "onPlayer", "offPlayer", "add", "remove", "removeall", "clearlogs", "scanall", "scanhere", "scan-around-players", "scan-player-inventory", "info", "reload", "list")
     private val scanStatus = mutableMapOf<String, Pair<Int, AtomicInteger>>()
 
     // 1-64, 1C(1728), 1LC(3456), 1C(1728)*1C(27), 1C(1728)*1LC(64)
@@ -106,7 +107,7 @@ object ItemFinderCommand: TabExecutor {
                 val snapshots = sender.world.loadedChunks.map { it.chunkSnapshot }
                 val count = AtomicInteger(0)
                 scanStatus[sender.world.name] = Pair(snapshots.size, count)
-                Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}${sender.world.name}ワールド内の読み込まれているすべてのチャンクのスキャンを開始しました。しばらく時間がかかります。", true)
+                Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}${sender.world.name}ワールド内の読み込まれているすべてのチャンクのスキャンを開始しました。しばらく時間がかかります。")
                 ScanChunkListener.chunkScannerExecutor.submit {
                     val futures = snapshots.map {
                         CompletableFuture.runAsync({
@@ -117,12 +118,13 @@ object ItemFinderCommand: TabExecutor {
                                 e.printStackTrace()
                             } finally {
                                 count.incrementAndGet()
+                                Thread.sleep(150)
                             }
                         }, ScanChunkListener.chunkScannerExecutor)
                     }
                     CompletableFuture.allOf(*futures.toTypedArray()).get()
                     scanStatus.remove(sender.world.name)
-                    Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}${sender.world.name}ワールド内のスキャンが完了しました。", true)
+                    Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}${sender.world.name}ワールド内のスキャンが完了しました。")
                 }
             }
             "scanhere" -> {
@@ -136,6 +138,37 @@ object ItemFinderCommand: TabExecutor {
                 ScanChunkListener.checkChunkAsync(c) {
                     sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。")
                 }
+            }
+            "scan-around-players" -> {
+                if (sender !is Player) {
+                    sender.sendMessage("${ChatColor.RED}このコマンドはコンソールからは実行できません。")
+                    return true
+                }
+                val players = sender.world.players
+                if (players.isEmpty()) {
+                    sender.sendMessage("${ChatColor.RED}このワールドにはプレイヤーがいません。")
+                    return true
+                }
+                val count = AtomicInteger(0)
+                Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}${players.size}人のプレイヤーのチャンクをスキャン中です。しばらく時間がかかります。")
+                players.forEach {
+                    ScanChunkListener.checkChunkAsync(it.location.chunk) {
+                        if (count.incrementAndGet() == players.size) {
+                            Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}プレイヤーのチャンクのスキャンが完了しました。")
+                        }
+                    }
+                }
+            }
+            "scan-player-inventory" -> {
+                if (sender !is Player) {
+                    sender.sendMessage("${ChatColor.RED}このコマンドはコンソールからは実行できません。")
+                    return true
+                }
+                Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}プレイヤーのインベントリをスキャン中です。")
+                Bukkit.getOnlinePlayers().forEach {
+                    ScanPlayerListener.checkPlayer(it)
+                }
+                Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}プレイヤーのインベントリのスキャンが完了しました。")
             }
             "info" -> {
                 scanStatus.forEach { (world, pair) ->
