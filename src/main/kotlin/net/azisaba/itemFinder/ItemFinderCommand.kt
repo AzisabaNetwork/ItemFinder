@@ -167,12 +167,12 @@ object ItemFinderCommand: TabExecutor {
                 Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}プレイヤーのインベントリをスキャン中です。")
                 val count = AtomicInteger(0)
                 Bukkit.getOnlinePlayers().forEach {
-                    Bukkit.getScheduler().runTaskTimer(ItemFinder.instance, Runnable {
+                    Bukkit.getScheduler().runTaskLater(ItemFinder.instance, Runnable {
                         ScanPlayerListener.checkPlayer(it)
                         if (count.incrementAndGet() == Bukkit.getOnlinePlayers().size) {
                             Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}プレイヤーのインベントリのスキャンが完了しました。")
                         }
-                    }, 5, 5)
+                    }, count.get() * 4)
                 }
             }
             "info" -> {
