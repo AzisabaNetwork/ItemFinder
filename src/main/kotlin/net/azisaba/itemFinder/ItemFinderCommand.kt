@@ -172,7 +172,7 @@ object ItemFinderCommand: TabExecutor {
                         if (count.incrementAndGet() == Bukkit.getOnlinePlayers().size) {
                             Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}プレイヤーのインベントリのスキャンが完了しました。")
                         }
-                    }, count.get() * 4)
+                    }, count.get().toLong() * 4)
                 }
             }
             "info" -> {
