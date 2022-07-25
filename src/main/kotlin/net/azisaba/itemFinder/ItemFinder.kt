@@ -6,7 +6,6 @@ import net.azisaba.itemFinder.util.Util
 import org.bukkit.configuration.ConfigurationSection
 import org.bukkit.inventory.ItemStack
 import org.bukkit.plugin.java.JavaPlugin
-import java.io.File
 
 class ItemFinder: JavaPlugin() {
     companion object {
@@ -59,16 +58,18 @@ class ItemFinder: JavaPlugin() {
                             }.toMutableList()
                         } catch (e: RuntimeException) {
                             logger.warning("[Config] Don't know how to deserialize $v @ seen>addToSeen>map")
+                            e.printStackTrace()
                         }
                     }
                 }
                 when (any) {
                     is ConfigurationSection -> addToSeen(any.getValues(true))
                     is Map<*, *> -> addToSeen(any)
-                    else -> error(":(")
+                    else -> error(any?.let { it::class.java.canonicalName }.toString())
                 }
             } catch (e: RuntimeException) {
                 logger.warning("[Config] Don't know how to deserialize $any @ seen")
+                e.printStackTrace()
             }
         }
     }

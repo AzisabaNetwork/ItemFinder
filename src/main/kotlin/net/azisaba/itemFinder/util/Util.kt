@@ -100,7 +100,7 @@ object Util {
 
     fun Double.wellRound() = (this * 100.0).roundToInt() / 100.0
 
-    fun String.encodeBase64() = Base64.getEncoder().encodeToString(this.toByteArray())
+    fun String.encodeBase64(): String = Base64.getEncoder().encodeToString(this.toByteArray())
     fun String.decodeBase64() = String(Base64.getDecoder().decode(this))
 
     fun InventoryHolder.check() = this.inventory.check()
@@ -109,7 +109,7 @@ object Util {
         val map = mutableMapOf<ItemStack, Int>()
         val items = { this.contents }.runOnMain().complete()
         items.forEach { itemStack ->
-            @Suppress("UNNECESSARY_SAFE_CALL")
+            @Suppress("UNNECESSARY_SAFE_CALL", "SAFE_CALL_WILL_CHANGE_NULLABILITY")
             itemStack?.check()?.forEach { (k, v) ->
                 map.merge(k, v, Integer::sum)
             }

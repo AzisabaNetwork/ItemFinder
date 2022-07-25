@@ -15,6 +15,7 @@ import org.bukkit.Chunk
 import org.bukkit.ChunkSnapshot
 import org.bukkit.Location
 import org.bukkit.attribute.Attribute
+import org.bukkit.command.CommandSender
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.ItemFrame
 import org.bukkit.entity.Player
@@ -47,7 +48,7 @@ object ScanChunkListener : Listener {
         checkChunkAsync(e.chunk)
     }
 
-    fun checkChunkAsync(chunk: Chunk, andThen: () -> Unit = {}): Future<*> {
+    fun checkChunkAsync(chunk: Chunk, sender: CommandSender? = null, andThen: () -> Unit = {}): Future<*> {
         if (ItemFinder.seen.getOrPut(chunk.world.name) { mutableListOf() }
                 .contains(chunk.x to chunk.z)) CompletableFuture.completedFuture(null)
         val wasLoaded = chunk.isLoaded
@@ -70,14 +71,7 @@ object ScanChunkListener : Listener {
                             HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.fromLegacyText("クリックでテレポート"))
                         posText.clickEvent =
                             ClickEvent(ClickEvent.Action.RUN_COMMAND, "/tppos $x $y $z 0 0 ${chunk.world.name}")
-                        Bukkit.getOnlinePlayers().filter { it.hasPermission("itemfinder.notify") }.forEach { p ->
-                            p.spigot().sendMessage(text)
-                            p.spigot().sendMessage(posText)
-                        }
-                        Bukkit.getConsoleSender().let { console ->
-                            console.spigot().sendMessage(text)
-                            console.spigot().sendMessage(posText)
-                        }
+                        notify(sender, text, posText)
                     }
                 }
             }
@@ -102,7 +96,7 @@ object ScanChunkListener : Listener {
         }
     }
 
-    fun checkChunk(snapshot: ChunkSnapshot) {
+    fun checkChunk(snapshot: ChunkSnapshot, sender: CommandSender? = null) {
         if (ItemFinder.seen.getOrPut(snapshot.worldName) { mutableListOf() }.contains(snapshot.x to snapshot.z)) return
         ItemFinder.seen[snapshot.worldName]!!.add(snapshot.x to snapshot.z)
         for (x in 0..15) {
@@ -140,14 +134,7 @@ object ScanChunkListener : Listener {
                                 ClickEvent.Action.RUN_COMMAND,
                                 "/tppos $absX $y $absZ 0 0 ${snapshot.worldName}"
                             )
-                            Bukkit.getOnlinePlayers().filter { it.hasPermission("itemfinder.notify") }.forEach { p ->
-                                p.spigot().sendMessage(text)
-                                p.spigot().sendMessage(posText)
-                            }
-                            Bukkit.getConsoleSender().let { console ->
-                                console.spigot().sendMessage(text)
-                                console.spigot().sendMessage(posText)
-                            }
+                            notify(sender, text, posText)
                         }
                     }
                     // TODO: remove when unneeded
@@ -165,17 +152,21 @@ object ScanChunkListener : Listener {
                             ClickEvent.Action.RUN_COMMAND,
                             "/tppos $absX $y $absZ 0 0 ${snapshot.worldName}"
                         )
-                        Bukkit.getOnlinePlayers().filter { it.hasPermission("itemfinder.notify") }.forEach { p ->
-                            p.spigot().sendMessage(text)
-                            p.spigot().sendMessage(posText)
-                        }
-                        Bukkit.getConsoleSender().let { console ->
-                            console.spigot().sendMessage(text)
-                            console.spigot().sendMessage(posText)
-                        }
+                        notify(sender, text, posText)
                     }
                 }
             }
+        }
+    }
+
+    internal fun notify(sender: CommandSender? = null, vararg components: TextComponent) {
+        if (sender == null) {
+            Bukkit.getOnlinePlayers()
+                .filter { it.hasPermission("itemfinder.notify") }
+                .forEach { p -> components.forEach { p.spigot().sendMessage(it) } }
+            Bukkit.getConsoleSender().let { console -> components.forEach { console.spigot().sendMessage(it) } }
+        } else {
+            components.forEach { sender.spigot().sendMessage(it) }
         }
     }
 }

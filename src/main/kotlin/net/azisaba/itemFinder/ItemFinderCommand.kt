@@ -30,7 +30,7 @@ object ItemFinderCommand: TabExecutor {
 
     override fun onCommand(sender: CommandSender, command: Command, s: String, args: Array<String>): Boolean {
         if (args.isEmpty()) {
-            sender.sendMessage("${ChatColor.RED}/itemfinder <on|off|onPlayer|offPlayer|add|remove|removeall|clearlogs|scanall|scanhere|info|list>")
+            sender.sendMessage("${ChatColor.RED}/itemfinder (${commands.joinToString("|")})")
             return true
         }
         when (args[0].lowercase()) {
@@ -135,7 +135,7 @@ object ItemFinderCommand: TabExecutor {
                 val c = sender.location.chunk
                 ItemFinder.seen.getOrPut(sender.world.name) { mutableListOf() }.remove(c.x to c.z)
                 sender.sendMessage("${ChatColor.GREEN}チャンクをスキャン中です。")
-                ScanChunkListener.checkChunkAsync(c) {
+                ScanChunkListener.checkChunkAsync(c, sender) {
                     sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。")
                 }
             }
@@ -152,7 +152,7 @@ object ItemFinderCommand: TabExecutor {
                 val count = AtomicInteger(0)
                 Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}${players.size}人のプレイヤーのチャンクをスキャン中です。しばらく時間がかかります。")
                 players.forEach {
-                    ScanChunkListener.checkChunkAsync(it.location.chunk) {
+                    ScanChunkListener.checkChunkAsync(it.location.chunk, sender) {
                         if (count.incrementAndGet() == players.size) {
                             Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}プレイヤーのチャンクのスキャンが完了しました。")
                         }
