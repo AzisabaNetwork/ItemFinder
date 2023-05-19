@@ -45,10 +45,14 @@ object ScanChunkListener : Listener {
             }
         }
         if (!enabled || e.isNewChunk) return
-        checkChunkAsync(e.chunk)
+        checkChunkAsync(e.chunk) { item, amount ->
+            ItemFinder.itemsToFind.any { itemStack ->
+                item.isSimilar(itemStack) && amount >= itemStack.amount
+            }
+        }
     }
 
-    fun checkChunkAsync(chunk: Chunk, sender: CommandSender? = null, andThen: () -> Unit = {}): Future<*> {
+    fun checkChunkAsync(chunk: Chunk, sender: CommandSender? = null, andThen: () -> Unit = {}, predicate: (item: ItemStack, amount: Int) -> Boolean): Future<*> {
         if (ItemFinder.seen.getOrPut(chunk.world.name) { mutableListOf() }
                 .contains(chunk.x to chunk.z)) CompletableFuture.completedFuture(null)
         val wasLoaded = chunk.isLoaded
@@ -57,14 +61,13 @@ object ScanChunkListener : Listener {
         val snapshot = {
             if (!wasLoaded) chunk.load()
             val check: (map: Map<ItemStack, Int>, loc: Location) -> Unit = { map, loc ->
-                ItemFinder.itemsToFind.forEach { itemStack ->
-                    val amount = map.filter { it.key.isSimilar(itemStack) }.entries.firstOrNull()?.value ?: 0
-                    if (amount >= itemStack.amount) {
+                map.forEach { (item, amount) ->
+                    if (predicate(item, amount)) {
                         val x = loc.blockX
                         val y = loc.blockY
                         val z = loc.blockZ
-                        val text = TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}${itemStack.itemMeta?.displayName or itemStack.type.name}${ChatColor.GOLD}]${ChatColor.YELLOW}x${amount} ${ChatColor.GOLD}が以下の座標から見つかりました:")
-                        text.hoverEvent = itemStack.toHoverEvent()
+                        val text = TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}${item.itemMeta?.displayName or item.type.name}${ChatColor.GOLD}]${ChatColor.YELLOW}x${amount} ${ChatColor.GOLD}が以下の座標から見つかりました:")
+                        text.hoverEvent = item.toHoverEvent()
                         val posText =
                             TextComponent("  ${ChatColor.GREEN}X: ${ChatColor.GOLD}$x, ${ChatColor.GREEN}Y: ${ChatColor.GOLD}$y, ${ChatColor.GREEN}Z: ${ChatColor.GOLD}$z")
                         posText.hoverEvent =
@@ -87,7 +90,7 @@ object ScanChunkListener : Listener {
         }.runOnMain().complete()
         return chunkScannerExecutor.submit {
             try {
-                { checkChunk(snapshot) }.runOnMain().complete()
+                { checkChunk(snapshot, sender, predicate) }.runOnMain().complete()
                 andThen()
             } catch (e: Exception) {
                 ItemFinder.instance.logger.warning("Could not check chunk ${chunk.x to chunk.z}")
@@ -96,7 +99,7 @@ object ScanChunkListener : Listener {
         }
     }
 
-    fun checkChunk(snapshot: ChunkSnapshot, sender: CommandSender? = null) {
+    fun checkChunk(snapshot: ChunkSnapshot, sender: CommandSender? = null, predicate: (item: ItemStack, amount: Int) -> Boolean) {
         if (ItemFinder.seen.getOrPut(snapshot.worldName) { mutableListOf() }.contains(snapshot.x to snapshot.z)) return
         ItemFinder.seen[snapshot.worldName]!!.add(snapshot.x to snapshot.z)
         for (x in 0..15) {
@@ -117,15 +120,13 @@ object ScanChunkListener : Listener {
                     ) continue
                     val state = snapshot.getBlockState(x, y, z).complete()
                     if (state !is InventoryHolder) continue
-                    val map = state.check()
-                    ItemFinder.itemsToFind.forEach { itemStack ->
-                        val amount = map.filter { it.key.isSimilar(itemStack) }.entries.firstOrNull()?.value ?: 0
-                        if (amount >= itemStack.amount) {
+                    state.check().forEach { (item, amount) ->
+                        if (predicate(item, amount)) {
                             val absX = snapshot.x * 16 + x
                             val absZ = snapshot.z * 16 + z
                             val text =
-                                TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}${itemStack.itemMeta?.displayName or itemStack.type.name}${ChatColor.GOLD}]${ChatColor.YELLOW}x${amount} ${ChatColor.GOLD}が以下の座標から見つかりました:")
-                            text.hoverEvent = itemStack.toHoverEvent()
+                                TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}${item.itemMeta?.displayName or item.type.name}${ChatColor.GOLD}]${ChatColor.YELLOW}x${amount} ${ChatColor.GOLD}が以下の座標から見つかりました:")
+                            text.hoverEvent = item.toHoverEvent()
                             val posText =
                                 TextComponent("  ${ChatColor.GREEN}X: ${ChatColor.GOLD}$absX, ${ChatColor.GREEN}Y: ${ChatColor.GOLD}$y, ${ChatColor.GREEN}Z: ${ChatColor.GOLD}$absZ")
                             posText.hoverEvent =
@@ -136,23 +137,6 @@ object ScanChunkListener : Listener {
                             )
                             notify(sender, text, posText)
                         }
-                    }
-                    // TODO: remove when unneeded
-                    val amount = map.filter { it.key.itemMeta?.attributeModifiers?.get(Attribute.GENERIC_LUCK)?.any { mod -> mod.amount > 100.0 } == true }.entries.firstOrNull()?.value ?: 0
-                    if (amount >= 1) {
-                        val absX = snapshot.x * 16 + x
-                        val absZ = snapshot.z * 16 + z
-                        val text =
-                            TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}Luck >= 100のやつ${ChatColor.GOLD}]${ChatColor.YELLOW}x${amount} ${ChatColor.GOLD}が以下の座標から見つかりました:")
-                        val posText =
-                            TextComponent("  ${ChatColor.GREEN}X: ${ChatColor.GOLD}$absX, ${ChatColor.GREEN}Y: ${ChatColor.GOLD}$y, ${ChatColor.GREEN}Z: ${ChatColor.GOLD}$absZ")
-                        posText.hoverEvent =
-                            HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.fromLegacyText("クリックでテレポート"))
-                        posText.clickEvent = ClickEvent(
-                            ClickEvent.Action.RUN_COMMAND,
-                            "/tppos $absX $y $absZ 0 0 ${snapshot.worldName}"
-                        )
-                        notify(sender, text, posText)
                     }
                 }
             }

@@ -107,12 +107,16 @@ object ItemFinderCommand: TabExecutor {
                 val snapshots = sender.world.loadedChunks.map { it.chunkSnapshot }
                 val count = AtomicInteger(0)
                 scanStatus[sender.world.name] = Pair(snapshots.size, count)
-                Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}${sender.world.name}ワールド内の読み込まれているすべてのチャンクのスキャンを開始しました。しばらく時間がかかります。")
+                sender.sendMessage("${ChatColor.GREEN}${sender.world.name}ワールド内の読み込まれているすべてのチャンクのスキャンを開始しました。しばらく時間がかかります。")
                 ScanChunkListener.chunkScannerExecutor.submit {
                     val futures = snapshots.map {
                         CompletableFuture.runAsync({
                             try {
-                                ScanChunkListener.checkChunk(it)
+                                ScanChunkListener.checkChunk(it, sender) { item, amount ->
+                                    ItemFinder.itemsToFind.any { itemStack ->
+                                        item.isSimilar(itemStack) && amount >= itemStack.amount
+                                    }
+                                }
                             } catch (e: Exception) {
                                 ItemFinder.instance.logger.warning("Failed to check chunk ${it.x to it.z}")
                                 e.printStackTrace()
@@ -124,7 +128,7 @@ object ItemFinderCommand: TabExecutor {
                     }
                     CompletableFuture.allOf(*futures.toTypedArray()).get()
                     scanStatus.remove(sender.world.name)
-                    Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}${sender.world.name}ワールド内のスキャンが完了しました。")
+                    sender.sendMessage("${ChatColor.GREEN}${sender.world.name}ワールド内のスキャンが完了しました。")
                 }
             }
             "scanhere" -> {
@@ -135,8 +139,17 @@ object ItemFinderCommand: TabExecutor {
                 val c = sender.location.chunk
                 ItemFinder.seen.getOrPut(sender.world.name) { mutableListOf() }.remove(c.x to c.z)
                 sender.sendMessage("${ChatColor.GREEN}チャンクをスキャン中です。")
-                ScanChunkListener.checkChunkAsync(c, sender) {
+                ScanChunkListener.checkChunkAsync(c, sender, {
                     sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。")
+                }) { item, amount ->
+                    if (args.size == 1) {
+                        ItemFinder.itemsToFind.any { itemStack ->
+                            item.isSimilar(itemStack) && amount >= itemStack.amount
+                        }
+                    } else {
+                        val joined = args.drop(1).joinToString(" ")
+                        item.type.name == joined || (item.hasItemMeta() && item.itemMeta?.hasDisplayName() == true && ChatColor.stripColor(item.itemMeta?.displayName) == joined)
+                    }
                 }
             }
             "scan-around-players" -> {
@@ -150,11 +163,15 @@ object ItemFinderCommand: TabExecutor {
                     return true
                 }
                 val count = AtomicInteger(0)
-                Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}${players.size}人のプレイヤーのチャンクをスキャン中です。しばらく時間がかかります。")
+                sender.sendMessage("${ChatColor.GREEN}${players.size}人のプレイヤーのチャンクをスキャン中です。しばらく時間がかかります。")
                 players.forEach {
-                    ScanChunkListener.checkChunkAsync(it.location.chunk, sender) {
+                    ScanChunkListener.checkChunkAsync(it.location.chunk, sender, {
                         if (count.incrementAndGet() == players.size) {
-                            Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}プレイヤーのチャンクのスキャンが完了しました。")
+                            sender.sendMessage("${ChatColor.GREEN}プレイヤーのチャンクのスキャンが完了しました。")
+                        }
+                    }) { item, amount ->
+                        ItemFinder.itemsToFind.any { itemStack ->
+                            item.isSimilar(itemStack) && amount >= itemStack.amount
                         }
                     }
                 }
@@ -164,13 +181,13 @@ object ItemFinderCommand: TabExecutor {
                     sender.sendMessage("${ChatColor.RED}このコマンドはコンソールからは実行できません。")
                     return true
                 }
-                Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}プレイヤーのインベントリをスキャン中です。")
+                sender.sendMessage("${ChatColor.GREEN}プレイヤーのインベントリをスキャン中です。")
                 val count = AtomicInteger(0)
                 Bukkit.getOnlinePlayers().forEach {
                     Bukkit.getScheduler().runTaskLater(ItemFinder.instance, Runnable {
                         ScanPlayerListener.checkPlayer(it)
                         if (count.incrementAndGet() == Bukkit.getOnlinePlayers().size) {
-                            Command.broadcastCommandMessage(sender, "${ChatColor.GREEN}プレイヤーのインベントリのスキャンが完了しました。")
+                            sender.sendMessage("${ChatColor.GREEN}プレイヤーのインベントリのスキャンが完了しました。")
                         }
                     }, count.get().toLong() * 4)
                 }
