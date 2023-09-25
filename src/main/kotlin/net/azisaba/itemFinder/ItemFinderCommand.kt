@@ -1,14 +1,14 @@
 package net.azisaba.itemFinder
 
+import com.sk89q.worldedit.IncompleteRegionException
+import com.sk89q.worldedit.WorldEdit
+import com.sk89q.worldedit.bukkit.BukkitAdapter
 import net.azisaba.itemFinder.listener.ScanChunkListener
 import net.azisaba.itemFinder.listener.ScanPlayerListener
-import net.azisaba.itemFinder.util.ItemData
-import net.azisaba.itemFinder.util.Util
+import net.azisaba.itemFinder.util.*
 import net.azisaba.itemFinder.util.Util.or
 import net.azisaba.itemFinder.util.Util.toHoverEvent
 import net.azisaba.itemFinder.util.Util.wellRound
-import net.azisaba.itemFinder.util.merge
-import net.azisaba.itemFinder.util.toCsv
 import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.HoverEvent
 import net.md_5.bungee.api.chat.TextComponent
@@ -25,7 +25,8 @@ import kotlin.math.max
 
 object ItemFinderCommand: TabExecutor {
     private val commands = listOf(
-        "on", "off", "onPlayer", "offPlayer", "add", "remove", "removeall", "clearlogs", "scanall", "scanhere", "scannearby",
+        "on", "off", "onPlayer", "offPlayer", "add", "remove", "removeall", "clearlogs",
+        "scanall", "scanhere", "scannearby", "scanarea",
         "scan-around-players", "scan-player-inventory", "info", "reload", "list",
     )
     private val scanStatus = mutableMapOf<String, Pair<Int, AtomicInteger>>()
@@ -121,7 +122,7 @@ object ItemFinderCommand: TabExecutor {
                     val futures = snapshots.map {
                         CompletableFuture.runAsync({
                             try {
-                                ScanChunkListener.checkChunk(it, sender) { item, amount ->
+                                ScanChunkListener.checkChunk(it, sender) { item, amount, _ ->
                                     ItemFinder.itemsToFind.any { itemStack ->
                                         item.isSimilar(itemStack) && amount >= itemStack.amount
                                     }
@@ -150,7 +151,7 @@ object ItemFinderCommand: TabExecutor {
                 sender.sendMessage("${ChatColor.GREEN}チャンクをスキャン中です。")
                 ScanChunkListener.checkChunkAsync(c, sender, {
                     sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。")
-                }) { item, amount ->
+                }) { item, amount, _ ->
                     if (args.size == 1) {
                         ItemFinder.itemsToFind.any { itemStack ->
                             item.isSimilar(itemStack) && amount >= itemStack.amount
@@ -198,7 +199,7 @@ object ItemFinderCommand: TabExecutor {
                         chunkLocations
                             .map { sender.world.getChunkAt(it.first, it.second) }
                             .map { c ->
-                                ScanChunkListener.checkChunkAsync(c, sender) { item, amount ->
+                                ScanChunkListener.checkChunkAsync(c, sender) { item, amount, _ ->
                                     val result = if (args.size == 2) {
                                         ItemFinder.itemsToFind
                                             .any { i -> item.isSimilar(i) && amount >= i.amount }
@@ -218,25 +219,70 @@ object ItemFinderCommand: TabExecutor {
                     } finally {
                         scanStatus.remove(worldName)
                         sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。")
-
-                        val allCsv = allItems.toCsv()
-                        val matchedCsv = matchedItems.toCsv()
-
-                        val resultsDir = File("plugins/ItemFinder/results")
-                        File(resultsDir, "$time-all.csv").writeText(allCsv.build())
-                        File(resultsDir, "$time-matched.csv").writeText(matchedCsv.build())
-                        if (matchedCsv.bodySize() <= 100) {
-                            val text = TextComponent("CSV形式でコピー")
-                            text.color = ChatColor.AQUA.asBungee()
-                            text.isUnderlined = true
-                            text.clickEvent = ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, matchedCsv.build())
-                            text.hoverEvent = HoverEvent(
-                                HoverEvent.Action.SHOW_TEXT,
-                                TextComponent.fromLegacyText("クリックでコピー")
-                            )
-                            sender.spigot().sendMessage(text)
-                        }
-                        sender.sendMessage("${ChatColor.GREEN}$time-all.csvと$time-matched.csvに保存されました。")
+                        showResults(sender, time, allItems.toCsv(), matchedItems.toCsv())
+                    }
+                }
+            }
+            "scanarea" -> {
+                if (!Bukkit.getPluginManager().isPluginEnabled("WorldEdit")) {
+                    sender.sendMessage("${ChatColor.RED}WorldEditが読み込まれていません。")
+                    return true
+                }
+                if (sender !is Player) {
+                    sender.sendMessage("${ChatColor.RED}このコマンドはコンソールからは実行できません。")
+                    return true
+                }
+                if (scanStatus.containsKey(sender.world.name)) {
+                    sender.sendMessage("${ChatColor.GREEN}このワールドはすでにスキャン中です。")
+                    return true
+                }
+                val actor = BukkitAdapter.adapt(sender)
+                val manager = WorldEdit.getInstance().sessionManager
+                val localSession = manager.get(actor)
+                val region = try {
+                    val world = localSession.selectionWorld ?: throw IncompleteRegionException()
+                    localSession.getSelection(world)
+                } catch (e: IncompleteRegionException) {
+                    actor.printError(com.sk89q.worldedit.util.formatting.text.TextComponent.of("Please make a region selection first."))
+                    return true
+                }
+                val count = AtomicInteger(0)
+                val worldName = sender.world.name
+                scanStatus[worldName] = Pair(region.chunks.size, count)
+                val time = Util.getCurrentDateTimeAsString()
+                sender.sendMessage("${ChatColor.GREEN}${region.chunks.size}個のチャンクをスキャン中です。")
+                val allItems = mutableListOf<ItemData>()
+                val matchedItems = mutableListOf<ItemData>()
+                ScanChunkListener.chunkScannerExecutor.submit {
+                    try {
+                        region.chunks
+                            .map { sender.world.getChunkAt(it.x, it.z) }
+                            .map { c ->
+                                ItemFinder.seen.getOrPut(sender.world.name) { mutableListOf() }.remove(c.x to c.z)
+                                ScanChunkListener.checkChunkAsync(c, sender) { item, amount, location ->
+                                    if (!region.contains(BukkitAdapter.adapt(location).toVector().toBlockPoint())) {
+                                        return@checkChunkAsync false
+                                    }
+                                    val result = if (args.size == 1) {
+                                        ItemFinder.itemsToFind
+                                            .any { i -> item.isSimilar(i) && amount >= i.amount }
+                                    } else {
+                                        val joined = args.drop(1).joinToString(" ")
+                                        item.type.name == joined || (item.hasItemMeta() &&
+                                                item.itemMeta?.hasDisplayName() == true &&
+                                                ChatColor.stripColor(item.itemMeta?.displayName) == joined)
+                                    }
+                                    val itemData = ItemData(item, amount.toLong())
+                                    allItems.merge(itemData)
+                                    if (result) matchedItems.merge(itemData)
+                                    return@checkChunkAsync result
+                                }
+                            }
+                            .forEach { it.get() }
+                    } finally {
+                        scanStatus.remove(worldName)
+                        sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。")
+                        showResults(sender, time, allItems.toCsv(), matchedItems.toCsv())
                     }
                 }
             }
@@ -257,7 +303,7 @@ object ItemFinderCommand: TabExecutor {
                         if (count.incrementAndGet() == players.size) {
                             sender.sendMessage("${ChatColor.GREEN}プレイヤーのチャンクのスキャンが完了しました。")
                         }
-                    }) { item, amount ->
+                    }) { item, amount, _ ->
                         ItemFinder.itemsToFind.any { itemStack ->
                             item.isSimilar(itemStack) && amount >= itemStack.amount
                         }
@@ -326,4 +372,22 @@ object ItemFinderCommand: TabExecutor {
     }
 
     private fun List<String>.filter(s: String): List<String> = distinct().filter { s1 -> s1.lowercase().startsWith(s.lowercase()) }
+
+    private fun showResults(sender: Player, time: String, allCsv: CsvBuilder, matchedCsv: CsvBuilder) {
+        val resultsDir = File("plugins/ItemFinder/results")
+        File(resultsDir, "$time-all.csv").writeText(allCsv.build())
+        File(resultsDir, "$time-matched.csv").writeText(matchedCsv.build())
+        if (matchedCsv.bodySize() <= 100) {
+            val text = TextComponent("CSV形式でコピー")
+            text.color = ChatColor.AQUA.asBungee()
+            text.isUnderlined = true
+            text.clickEvent = ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, matchedCsv.build())
+            text.hoverEvent = HoverEvent(
+                HoverEvent.Action.SHOW_TEXT,
+                TextComponent.fromLegacyText("クリックでコピー")
+            )
+            sender.spigot().sendMessage(text)
+        }
+        sender.sendMessage("${ChatColor.GREEN}$time-all.csvと$time-matched.csvに保存されました。")
+    }
 }

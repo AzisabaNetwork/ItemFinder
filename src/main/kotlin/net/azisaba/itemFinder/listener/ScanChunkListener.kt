@@ -44,14 +44,14 @@ object ScanChunkListener : Listener {
             }
         }
         if (!enabled || e.isNewChunk) return
-        checkChunkAsync(e.chunk) { item, amount ->
+        checkChunkAsync(e.chunk) { item, amount, _ ->
             ItemFinder.itemsToFind.any { itemStack ->
                 item.isSimilar(itemStack) && amount >= itemStack.amount
             }
         }
     }
 
-    fun checkChunkAsync(chunk: Chunk, sender: CommandSender? = null, andThen: () -> Unit = {}, predicate: (item: ItemStack, amount: Int) -> Boolean): Future<*> {
+    fun checkChunkAsync(chunk: Chunk, sender: CommandSender? = null, andThen: () -> Unit = {}, predicate: (item: ItemStack, amount: Int, location: Location) -> Boolean): Future<*> {
         if (ItemFinder.seen.getOrPut(chunk.world.name) { mutableListOf() }
                 .contains(chunk.x to chunk.z)) CompletableFuture.completedFuture(null)
         val wasLoaded = chunk.isLoaded
@@ -60,7 +60,7 @@ object ScanChunkListener : Listener {
             if (!wasLoaded) chunk.load()
             val check: (map: Map<ItemStack, Int>, loc: Location) -> Unit = { map, loc ->
                 map.forEach { (item, amount) ->
-                    if (predicate(item, amount)) {
+                    if (predicate(item, amount, loc)) {
                         val x = loc.blockX
                         val y = loc.blockY
                         val z = loc.blockZ
@@ -98,7 +98,7 @@ object ScanChunkListener : Listener {
         }
     }
 
-    fun checkChunk(snapshot: ChunkSnapshot, sender: CommandSender? = null, predicate: (item: ItemStack, amount: Int) -> Boolean) {
+    fun checkChunk(snapshot: ChunkSnapshot, sender: CommandSender? = null, predicate: (item: ItemStack, amount: Int, location: Location) -> Boolean) {
         if (ItemFinder.seen.getOrPut(snapshot.worldName) { mutableListOf() }.contains(snapshot.x to snapshot.z)) return
         ItemFinder.seen[snapshot.worldName]!!.add(snapshot.x to snapshot.z)
         for (x in 0..15) {
@@ -120,7 +120,7 @@ object ScanChunkListener : Listener {
                     val state = snapshot.getBlockState(x, y, z).complete()
                     if (state !is InventoryHolder) continue
                     state.check().forEach { (item, amount) ->
-                        if (predicate(item, amount)) {
+                        if (predicate(item, amount, state.location)) {
                             val absX = snapshot.x * 16 + x
                             val absZ = snapshot.z * 16 + z
                             val text =
