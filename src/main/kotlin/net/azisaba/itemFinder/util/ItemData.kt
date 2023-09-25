@@ -22,6 +22,11 @@ data class ItemData(
     fun isSimilar(another: ItemData) = type == another.type && another.displayName == displayName
 
     fun grow(amount: Long) = copy(amount = this.amount + amount)
+
+    /**
+     * Converts the ItemData to array of amount, type, name (without color), name (with color)
+     */
+    fun toStringArray() = arrayOf(amount.toString(), type.name, displayNameWithoutColor.toString(), displayName.toString())
 }
 
 fun MutableList<ItemData>.merge(itemData: ItemData) {

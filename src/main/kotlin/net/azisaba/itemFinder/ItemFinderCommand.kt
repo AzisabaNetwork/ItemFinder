@@ -123,13 +123,14 @@ object ItemFinderCommand: TabExecutor {
                 val worldName = sender.world.name
                 val allItems = mutableListOf<ItemData>()
                 val matchedItems = mutableListOf<ItemData>()
+                val locations = CsvBuilder("Location", "Amount", "Type", "Item name", "Item name with color")
                 scanStatus[worldName] = Pair(snapshots.size, count)
                 sender.sendMessage("${ChatColor.GREEN}${worldName}ワールド内の読み込まれているすべてのチャンクのスキャンを開始しました。しばらく時間がかかります。")
                 ScanChunkListener.chunkScannerExecutor.submit {
                     val futures = snapshots.map {
                         CompletableFuture.runAsync({
                             try {
-                                ScanChunkListener.checkChunk(it, sender) { item, amount, _ ->
+                                ScanChunkListener.checkChunk(it, sender) { item, amount, location ->
                                     val itemData = ItemData(item, amount.toLong())
                                     allItems.merge(itemData)
                                     ItemFinder.itemsToFind.any { itemStack ->
@@ -137,6 +138,7 @@ object ItemFinderCommand: TabExecutor {
                                     }.also { result ->
                                         if (result) {
                                             matchedItems.merge(itemData)
+                                            locations.add("${location.blockX}, ${location.blockY}, ${location.blockZ}", *itemData.toStringArray())
                                         }
                                     }
                                 }
@@ -152,7 +154,7 @@ object ItemFinderCommand: TabExecutor {
                     CompletableFuture.allOf(*futures.toTypedArray()).get()
                     scanStatus.remove(worldName)
                     sender.sendMessage("${ChatColor.GREEN}${worldName}ワールド内のスキャンが完了しました。")
-                    showResults(sender, time, allItems.toCsv(), matchedItems.toCsv())
+                    showResults(sender, time, allItems.toCsv(), matchedItems.toCsv(), locations)
                 }
             }
             "scanhere" -> {
@@ -208,12 +210,13 @@ object ItemFinderCommand: TabExecutor {
                 sender.sendMessage("${ChatColor.GREEN}${chunkLocations.size}個のチャンクをスキャン中です。")
                 val allItems = mutableListOf<ItemData>()
                 val matchedItems = mutableListOf<ItemData>()
+                val locations = CsvBuilder("Location", "Amount", "Type", "Item name", "Item name with color")
                 ScanChunkListener.chunkScannerExecutor.submit {
                     try {
                         chunkLocations
                             .map { sender.world.getChunkAt(it.first, it.second) }
                             .map { c ->
-                                ScanChunkListener.checkChunkAsync(c, sender) { item, amount, _ ->
+                                ScanChunkListener.checkChunkAsync(c, sender) { item, amount, location ->
                                     val result = if (args.size == 2) {
                                         ItemFinder.itemsToFind
                                             .any { i -> item.isSimilar(i) && amount >= i.amount }
@@ -225,7 +228,10 @@ object ItemFinderCommand: TabExecutor {
                                     }
                                     val itemData = ItemData(item, amount.toLong())
                                     allItems.merge(itemData)
-                                    if (result) matchedItems.merge(itemData)
+                                    if (result) {
+                                        matchedItems.merge(itemData)
+                                        locations.add("${location.blockX}, ${location.blockY}, ${location.blockZ}", *itemData.toStringArray())
+                                    }
                                     return@checkChunkAsync result
                                 }
                             }
@@ -233,7 +239,7 @@ object ItemFinderCommand: TabExecutor {
                     } finally {
                         scanStatus.remove(worldName)
                         sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。")
-                        showResults(sender, time, allItems.toCsv(), matchedItems.toCsv())
+                        showResults(sender, time, allItems.toCsv(), matchedItems.toCsv(), locations)
                     }
                 }
             }
@@ -267,6 +273,7 @@ object ItemFinderCommand: TabExecutor {
                 sender.sendMessage("${ChatColor.GREEN}${region.chunks.size}個のチャンクをスキャン中です。")
                 val allItems = mutableListOf<ItemData>()
                 val matchedItems = mutableListOf<ItemData>()
+                val locations = CsvBuilder("Location", "Amount", "Type", "Item name", "Item name with color")
                 ScanChunkListener.chunkScannerExecutor.submit {
                     try {
                         region.chunks
@@ -288,7 +295,10 @@ object ItemFinderCommand: TabExecutor {
                                     }
                                     val itemData = ItemData(item, amount.toLong())
                                     allItems.merge(itemData)
-                                    if (result) matchedItems.merge(itemData)
+                                    if (result) {
+                                        matchedItems.merge(itemData)
+                                        locations.add("${location.blockX}, ${location.blockY}, ${location.blockZ}", *itemData.toStringArray())
+                                    }
                                     return@checkChunkAsync result
                                 }
                             }
@@ -296,7 +306,7 @@ object ItemFinderCommand: TabExecutor {
                     } finally {
                         scanStatus.remove(worldName)
                         sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。")
-                        showResults(sender, time, allItems.toCsv(), matchedItems.toCsv())
+                        showResults(sender, time, allItems.toCsv(), matchedItems.toCsv(), locations)
                     }
                 }
             }
@@ -387,10 +397,12 @@ object ItemFinderCommand: TabExecutor {
 
     private fun List<String>.filter(s: String): List<String> = distinct().filter { s1 -> s1.lowercase().startsWith(s.lowercase()) }
 
-    private fun showResults(sender: Player, time: String, allCsv: CsvBuilder, matchedCsv: CsvBuilder) {
+    private fun showResults(sender: Player, time: String, allCsv: CsvBuilder, matchedCsv: CsvBuilder, locations: CsvBuilder? = null) {
         val resultsDir = File("plugins/ItemFinder/results")
+        resultsDir.mkdirs()
         File(resultsDir, "$time-all.csv").writeText(allCsv.build())
         File(resultsDir, "$time-matched.csv").writeText(matchedCsv.build())
+        if (locations != null) File(resultsDir, "$time-locations.csv").writeText(locations.build())
         if (matchedCsv.bodySize() <= 100) {
             val text = TextComponent("CSV形式でコピー")
             text.color = ChatColor.AQUA.asBungee()
@@ -402,6 +414,10 @@ object ItemFinderCommand: TabExecutor {
             )
             sender.spigot().sendMessage(text)
         }
-        sender.sendMessage("${ChatColor.GREEN}$time-all.csvと$time-matched.csvに保存されました。")
+        if (locations == null) {
+            sender.sendMessage("${ChatColor.GREEN}$time-all.csv, $time-matched.csvに保存されました。")
+        } else {
+            sender.sendMessage("${ChatColor.GREEN}$time-all.csv, $time-matched.csv, $time-locations.csvに保存されました。")
+        }
     }
 }
