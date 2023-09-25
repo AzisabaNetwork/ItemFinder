@@ -111,7 +111,7 @@ object Util {
 
     fun InventoryHolder.check(): Map<ItemStack, Int> {
         val inventory = this.inventory
-        val holder = inventory.holder
+        val holder = { inventory.holder }.runOnMain().complete()
         if (this is Chest && inventory is DoubleChestInventory && holder is DoubleChest) {
             if ((holder.leftSide as? Chest)?.location == this.location) {
                 return inventory.leftSide.check()

@@ -114,8 +114,15 @@ object ItemFinderCommand: TabExecutor {
                 }
                 sender.sendMessage("${ChatColor.GREEN}${sender.world.name}ワールド内の読み込まれているすべてのチャンクのデータを取得中です。")
                 val snapshots = sender.world.loadedChunks.map { it.chunkSnapshot }
+                if (scanStatus.containsKey(sender.world.name)) {
+                    sender.sendMessage("${ChatColor.GREEN}このワールドはすでにスキャン中です。")
+                    return true
+                }
+                val time = Util.getCurrentDateTimeAsString()
                 val count = AtomicInteger(0)
                 val worldName = sender.world.name
+                val allItems = mutableListOf<ItemData>()
+                val matchedItems = mutableListOf<ItemData>()
                 scanStatus[worldName] = Pair(snapshots.size, count)
                 sender.sendMessage("${ChatColor.GREEN}${worldName}ワールド内の読み込まれているすべてのチャンクのスキャンを開始しました。しばらく時間がかかります。")
                 ScanChunkListener.chunkScannerExecutor.submit {
@@ -123,8 +130,14 @@ object ItemFinderCommand: TabExecutor {
                         CompletableFuture.runAsync({
                             try {
                                 ScanChunkListener.checkChunk(it, sender) { item, amount, _ ->
+                                    val itemData = ItemData(item, amount.toLong())
+                                    allItems.merge(itemData)
                                     ItemFinder.itemsToFind.any { itemStack ->
                                         item.isSimilar(itemStack) && amount >= itemStack.amount
+                                    }.also { result ->
+                                        if (result) {
+                                            matchedItems.merge(itemData)
+                                        }
                                     }
                                 }
                             } catch (e: Exception) {
@@ -139,6 +152,7 @@ object ItemFinderCommand: TabExecutor {
                     CompletableFuture.allOf(*futures.toTypedArray()).get()
                     scanStatus.remove(worldName)
                     sender.sendMessage("${ChatColor.GREEN}${worldName}ワールド内のスキャンが完了しました。")
+                    showResults(sender, time, allItems.toCsv(), matchedItems.toCsv())
                 }
             }
             "scanhere" -> {
