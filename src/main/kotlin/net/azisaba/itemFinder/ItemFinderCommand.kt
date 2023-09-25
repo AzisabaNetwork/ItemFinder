@@ -19,6 +19,7 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabExecutor
 import org.bukkit.entity.Player
 import java.io.File
+import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
@@ -132,12 +133,12 @@ object ItemFinderCommand: TabExecutor {
                             try {
                                 ScanChunkListener.checkChunk(it, sender) { item, amount, location ->
                                     val itemData = ItemData(item, amount.toLong())
-                                    allItems.merge(itemData)
+                                    synchronized(allItems) { allItems.merge(itemData) }
                                     ItemFinder.itemsToFind.any { itemStack ->
                                         item.isSimilar(itemStack) && amount >= itemStack.amount
                                     }.also { result ->
                                         if (result) {
-                                            matchedItems.merge(itemData)
+                                            synchronized(matchedItems) { matchedItems.merge(itemData) }
                                             locations.add("${location.blockX}, ${location.blockY}, ${location.blockZ}", *itemData.toStringArray())
                                         }
                                     }
@@ -227,9 +228,9 @@ object ItemFinderCommand: TabExecutor {
                                                 ChatColor.stripColor(item.itemMeta?.displayName) == joined)
                                     }
                                     val itemData = ItemData(item, amount.toLong())
-                                    allItems.merge(itemData)
+                                    synchronized(allItems) { allItems.merge(itemData) }
                                     if (result) {
-                                        matchedItems.merge(itemData)
+                                        synchronized(matchedItems) { matchedItems.merge(itemData) }
                                         locations.add("${location.blockX}, ${location.blockY}, ${location.blockZ}", *itemData.toStringArray())
                                     }
                                     return@checkChunkAsync result
@@ -271,8 +272,8 @@ object ItemFinderCommand: TabExecutor {
                 scanStatus[worldName] = Pair(region.chunks.size, count)
                 val time = Util.getCurrentDateTimeAsString()
                 sender.sendMessage("${ChatColor.GREEN}${region.chunks.size}個のチャンクをスキャン中です。")
-                val allItems = mutableListOf<ItemData>()
-                val matchedItems = mutableListOf<ItemData>()
+                val allItems = Collections.synchronizedList(mutableListOf<ItemData>())
+                val matchedItems = Collections.synchronizedList(mutableListOf<ItemData>())
                 val locations = CsvBuilder("Location", "Amount", "Type", "Item name", "Item name with color")
                 ScanChunkListener.chunkScannerExecutor.submit {
                     try {
@@ -294,9 +295,9 @@ object ItemFinderCommand: TabExecutor {
                                                 ChatColor.stripColor(item.itemMeta?.displayName) == joined)
                                     }
                                     val itemData = ItemData(item, amount.toLong())
-                                    allItems.merge(itemData)
+                                    synchronized(allItems) { allItems.merge(itemData) }
                                     if (result) {
-                                        matchedItems.merge(itemData)
+                                        synchronized(matchedItems) { matchedItems.merge(itemData) }
                                         locations.add("${location.blockX}, ${location.blockY}, ${location.blockZ}", *itemData.toStringArray())
                                     }
                                     return@checkChunkAsync result
