@@ -122,7 +122,7 @@ object ItemFinderCommand: TabExecutor {
                                 e.printStackTrace()
                             } finally {
                                 count.incrementAndGet()
-                                Thread.sleep(150)
+                                Thread.sleep(200)
                             }
                         }, ScanChunkListener.chunkScannerExecutor)
                     }

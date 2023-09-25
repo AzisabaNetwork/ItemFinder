@@ -14,7 +14,6 @@ import org.bukkit.ChatColor
 import org.bukkit.Chunk
 import org.bukkit.ChunkSnapshot
 import org.bukkit.Location
-import org.bukkit.attribute.Attribute
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.ItemFrame
@@ -57,7 +56,6 @@ object ScanChunkListener : Listener {
                 .contains(chunk.x to chunk.z)) CompletableFuture.completedFuture(null)
         val wasLoaded = chunk.isLoaded
 
-        @Suppress("UNNECESSARY_SAFE_CALL")
         val snapshot = {
             if (!wasLoaded) chunk.load()
             val check: (map: Map<ItemStack, Int>, loc: Location) -> Unit = { map, loc ->
@@ -74,7 +72,8 @@ object ScanChunkListener : Listener {
                             HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.fromLegacyText("クリックでテレポート"))
                         posText.clickEvent =
                             ClickEvent(ClickEvent.Action.RUN_COMMAND, "/tppos $x $y $z 0 0 ${chunk.world.name}")
-                        notify(sender, text, posText)
+                        text.addExtra(posText)
+                        notify(sender, text)
                     }
                 }
             }
@@ -135,7 +134,8 @@ object ScanChunkListener : Listener {
                                 ClickEvent.Action.RUN_COMMAND,
                                 "/tppos $absX $y $absZ 0 0 ${snapshot.worldName}"
                             )
-                            notify(sender, text, posText)
+                            text.addExtra(posText)
+                            notify(sender, text)
                         }
                     }
                 }

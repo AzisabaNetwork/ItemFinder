@@ -7,13 +7,16 @@ import net.md_5.bungee.api.chat.TextComponent
 import org.bukkit.Bukkit
 import org.bukkit.ChunkSnapshot
 import org.bukkit.block.BlockState
+import org.bukkit.block.Chest
+import org.bukkit.block.DoubleChest
+import org.bukkit.inventory.DoubleChestInventory
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.InventoryHolder
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.BlockStateMeta
 import util.promise.rewrite.Promise
 import util.reflect.Reflect
-import java.util.Base64
+import java.util.*
 import kotlin.math.roundToInt
 
 object Util {
@@ -103,7 +106,19 @@ object Util {
     fun String.encodeBase64(): String = Base64.getEncoder().encodeToString(this.toByteArray())
     fun String.decodeBase64() = String(Base64.getDecoder().decode(this))
 
-    fun InventoryHolder.check() = this.inventory.check()
+    fun InventoryHolder.check(): Map<ItemStack, Int> {
+        val inventory = this.inventory
+        val holder = inventory.holder
+        if (this is Chest && inventory is DoubleChestInventory && holder is DoubleChest) {
+            if ((holder.leftSide as? Chest)?.location == this.location) {
+                return inventory.leftSide.check()
+            }
+            if ((holder.rightSide as? Chest)?.location == this.location) {
+                return inventory.rightSide.check()
+            }
+        }
+        return this.inventory.check()
+    }
 
     fun Inventory.check(): Map<ItemStack, Int> {
         val map = mutableMapOf<ItemStack, Int>()
