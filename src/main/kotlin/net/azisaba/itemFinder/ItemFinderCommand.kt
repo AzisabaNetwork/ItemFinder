@@ -125,7 +125,13 @@ object ItemFinderCommand: TabExecutor {
                     return true
                 }
                 sender.sendMessage("${ChatColor.GREEN}${sender.world.name}ワールド内の読み込まれているすべてのチャンクのデータを取得中です。")
-                val snapshots = sender.world.loadedChunks.map { it.chunkSnapshot }
+                val snapshots = sender.world.loadedChunks.mapNotNull {
+                    if (ItemFinder.seen[sender.world.name]?.contains(it.x to it.z) == true) {
+                        null
+                    } else {
+                        it.chunkSnapshot
+                    }
+                }
                 if (scanStatus.containsKey(sender.world.name)) {
                     sender.sendMessage("${ChatColor.GREEN}このワールドはすでにスキャン中です。")
                     return true
@@ -137,7 +143,7 @@ object ItemFinderCommand: TabExecutor {
                 val matchedItems = mutableListOf<ItemData>()
                 val locations = CsvBuilder("Location", "Amount", "Type", "Item name", "Item name with color")
                 scanStatus[worldName] = Pair(snapshots.size, count)
-                sender.sendMessage("${ChatColor.GREEN}${worldName}ワールド内の読み込まれているすべてのチャンクのスキャンを開始しました。しばらく時間がかかります。")
+                sender.sendMessage("${ChatColor.GREEN}${worldName}ワールド内の${snapshots.size}個のチャンクのスキャンを開始しました。しばらく時間がかかります。")
                 ScanChunkListener.chunkScannerExecutor.submit {
                     val futures = snapshots.map {
                         CompletableFuture.runAsync({
