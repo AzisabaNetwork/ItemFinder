@@ -6,6 +6,7 @@ import net.azisaba.itemFinder.util.Util
 import org.bukkit.configuration.ConfigurationSection
 import org.bukkit.inventory.ItemStack
 import org.bukkit.plugin.java.JavaPlugin
+import java.io.File
 
 class ItemFinder: JavaPlugin() {
     companion object {
@@ -19,6 +20,7 @@ class ItemFinder: JavaPlugin() {
     }
 
     override fun onEnable() {
+        File(dataFolder, "results").mkdirs()
         Class.forName("net.azisaba.itemFinder.libs.kotlin.collections.MapsKt")
         Class.forName("net.azisaba.itemFinder.libs.kotlin.collections.ArraysKt")
         logger.info("Is 1.17: ${Util.is1_17}")

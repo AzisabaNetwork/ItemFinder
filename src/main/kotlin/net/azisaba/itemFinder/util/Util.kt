@@ -16,7 +16,10 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.BlockStateMeta
 import util.promise.rewrite.Promise
 import util.reflect.Reflect
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.*
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 object Util {
@@ -146,5 +149,19 @@ object Util {
             }
         }
         return map
+    }
+
+    fun getCurrentDateTimeAsString(): String {
+        val zone = TimeZone.getDefault()
+        val zoneName = zone.getDisplayName(false, TimeZone.SHORT, Locale.ENGLISH)
+        val now = LocalDateTime.now(zone.toZoneId())
+        val date = "${padStartZero(now.year, 4)}-${padStartZero(now.monthValue, 2)}-${padStartZero(now.dayOfMonth, 2)}"
+        val time = "${padStartZero(now.hour, 2)}-${padStartZero(now.minute, 2)}-${padStartZero(now.second, 2)}"
+        return "${date}_${time}_$zoneName"
+    }
+
+    private fun padStartZero(value: Int, len: Int): String {
+        val str = value.toString()
+        return "0".repeat(max(0, len - str.length)) + str
     }
 }
