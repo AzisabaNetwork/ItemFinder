@@ -408,7 +408,7 @@ object ItemFinderCommand: TabExecutor {
             val text = TextComponent("CSV形式でコピー")
             text.color = ChatColor.AQUA.asBungee()
             text.isUnderlined = true
-            text.clickEvent = ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, matchedCsv.build())
+            text.clickEvent = ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, (locations ?: matchedCsv).build())
             text.hoverEvent = HoverEvent(
                 HoverEvent.Action.SHOW_TEXT,
                 TextComponent.fromLegacyText("クリックでコピー")
