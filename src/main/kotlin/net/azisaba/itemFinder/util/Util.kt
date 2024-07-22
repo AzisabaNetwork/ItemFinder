@@ -1,6 +1,7 @@
 package net.azisaba.itemFinder.util
 
 import net.azisaba.itemFinder.ItemFinder
+import net.azisaba.itemFinder.util.Util.check
 import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.HoverEvent
 import net.md_5.bungee.api.chat.TextComponent
@@ -19,8 +20,11 @@ import util.reflect.Reflect
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.*
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.reflect.KProperty
 
 object Util {
     private val serverVersion =
@@ -124,9 +128,12 @@ object Util {
     }
 
     fun Inventory.check(): Map<ItemStack, Int> {
+        return { this.contents }.runOnMain().complete().asIterable().check()
+    }
+
+    fun Iterable<ItemStack>.check(): Map<ItemStack, Int> {
         val map = mutableMapOf<ItemStack, Int>()
-        val items = { this.contents }.runOnMain().complete()
-        items.forEach { itemStack ->
+        forEach { itemStack ->
             @Suppress("UNNECESSARY_SAFE_CALL", "SAFE_CALL_WILL_CHANGE_NULLABILITY")
             itemStack?.check()?.forEach { (k, v) ->
                 map.merge(k, v, Integer::sum)
@@ -164,4 +171,7 @@ object Util {
         val str = value.toString()
         return "0".repeat(max(0, len - str.length)) + str
     }
+
+    fun <T> List<T>.split(toSize: Int): List<List<T>> =
+        chunked(ceil(size / toSize.toDouble()).toInt())
 }

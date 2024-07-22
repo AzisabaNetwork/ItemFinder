@@ -7,27 +7,38 @@ import net.azisaba.itemFinder.listener.ScanChunkListener
 import net.azisaba.itemFinder.listener.ScanPlayerListener
 import net.azisaba.itemFinder.util.*
 import net.azisaba.itemFinder.util.Util.or
+import net.azisaba.itemFinder.util.Util.split
 import net.azisaba.itemFinder.util.Util.toHoverEvent
 import net.azisaba.itemFinder.util.Util.wellRound
 import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.HoverEvent
 import net.md_5.bungee.api.chat.TextComponent
+import net.minecraft.server.v1_15_R1.ChunkCoordIntPair
+import net.minecraft.server.v1_15_R1.ContainerUtil
+import net.minecraft.server.v1_15_R1.NBTTagCompound
+import net.minecraft.server.v1_15_R1.NonNullList
+import net.minecraft.server.v1_15_R1.RegionFileCache
 import org.bukkit.Bukkit
 import org.bukkit.ChatColor
 import org.bukkit.command.Command
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabExecutor
+import org.bukkit.craftbukkit.v1_15_R1.inventory.CraftItemStack
 import org.bukkit.entity.Player
+import org.bukkit.inventory.ItemStack
+import xyz.acrylicstyle.storageBox.utils.StorageBox
 import java.io.File
 import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.floor
 import kotlin.math.max
 
 object ItemFinderCommand: TabExecutor {
     private val commands = listOf(
         "on", "off", "onPlayer", "offPlayer", "add", "remove", "removeall", "clearlogs",
-        "scanall", "scanhere", "scannearby", "scanarea",
+        "scanall", "scanhere", "scannearby", "scanarea", "scan-region", "scan-all-regions",
         "scan-around-players", "scan-player-inventory", "info", "reload", "list",
     )
     private val scanStatus = mutableMapOf<String, Pair<Int, AtomicInteger>>()
@@ -132,15 +143,13 @@ object ItemFinderCommand: TabExecutor {
                         CompletableFuture.runAsync({
                             try {
                                 ScanChunkListener.checkChunk(it, sender) { item, amount, location ->
-                                    val itemData = ItemData(item, amount.toLong())
-                                    synchronized(allItems) { allItems.merge(itemData) }
-                                    ItemFinder.itemsToFind.any { itemStack ->
-                                        item.isSimilar(itemStack) && amount >= itemStack.amount
-                                    }.also { result ->
+                                    var itemData = ItemData(item, amount.toLong())
+                                    getCompareResult(item, amount) { itemData = it }.also { result ->
                                         if (result) {
                                             synchronized(matchedItems) { matchedItems.merge(itemData) }
                                             locations.add("${location.blockX}, ${location.blockY}, ${location.blockZ}", *itemData.toStringArray())
                                         }
+                                        synchronized(allItems) { allItems.merge(itemData) }
                                     }
                                 }
                             } catch (e: Exception) {
@@ -170,9 +179,7 @@ object ItemFinderCommand: TabExecutor {
                     sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。")
                 }) { item, amount, _ ->
                     if (args.size == 1) {
-                        ItemFinder.itemsToFind.any { itemStack ->
-                            item.isSimilar(itemStack) && amount >= itemStack.amount
-                        }
+                        getCompareResult(item, amount) {}
                     } else {
                         val joined = args.drop(1).joinToString(" ")
                         item.type.name == joined || (item.hasItemMeta() && item.itemMeta?.hasDisplayName() == true && ChatColor.stripColor(item.itemMeta?.displayName) == joined)
@@ -218,16 +225,15 @@ object ItemFinderCommand: TabExecutor {
                             .map { sender.world.getChunkAt(it.first, it.second) }
                             .map { c ->
                                 ScanChunkListener.checkChunkAsync(c, sender) { item, amount, location ->
+                                    var itemData = ItemData(item, amount.toLong())
                                     val result = if (args.size == 2) {
-                                        ItemFinder.itemsToFind
-                                            .any { i -> item.isSimilar(i) && amount >= i.amount }
+                                        getCompareResult(item, amount) { itemData = it }
                                     } else {
                                         val joined = args.drop(2).joinToString(" ")
                                         item.type.name == joined || (item.hasItemMeta() &&
                                                 item.itemMeta?.hasDisplayName() == true &&
                                                 ChatColor.stripColor(item.itemMeta?.displayName) == joined)
                                     }
-                                    val itemData = ItemData(item, amount.toLong())
                                     synchronized(allItems) { allItems.merge(itemData) }
                                     if (result) {
                                         synchronized(matchedItems) { matchedItems.merge(itemData) }
@@ -285,16 +291,15 @@ object ItemFinderCommand: TabExecutor {
                                     if (!region.contains(BukkitAdapter.adapt(location).toVector().toBlockPoint())) {
                                         return@checkChunkAsync false
                                     }
+                                    var itemData = ItemData(item, amount.toLong())
                                     val result = if (args.size == 1) {
-                                        ItemFinder.itemsToFind
-                                            .any { i -> item.isSimilar(i) && amount >= i.amount }
+                                        getCompareResult(item, amount) { itemData = it }
                                     } else {
                                         val joined = args.drop(1).joinToString(" ")
                                         item.type.name == joined || (item.hasItemMeta() &&
                                                 item.itemMeta?.hasDisplayName() == true &&
                                                 ChatColor.stripColor(item.itemMeta?.displayName) == joined)
                                     }
-                                    val itemData = ItemData(item, amount.toLong())
                                     synchronized(allItems) { allItems.merge(itemData) }
                                     if (result) {
                                         synchronized(matchedItems) { matchedItems.merge(itemData) }
@@ -329,9 +334,7 @@ object ItemFinderCommand: TabExecutor {
                             sender.sendMessage("${ChatColor.GREEN}プレイヤーのチャンクのスキャンが完了しました。")
                         }
                     }) { item, amount, _ ->
-                        ItemFinder.itemsToFind.any { itemStack ->
-                            item.isSimilar(itemStack) && amount >= itemStack.amount
-                        }
+                        getCompareResult(item, amount) {}
                     }
                 }
             }
@@ -350,6 +353,119 @@ object ItemFinderCommand: TabExecutor {
                         }
                     }, count.get().toLong() * 4)
                 }
+            }
+            "scan-region" -> {
+                val player = sender as Player
+                val worldName = player.world.name
+                val chunkX = player.location.chunk.x
+                val chunkZ = player.location.chunk.z
+                Bukkit.getScheduler().runTaskAsynchronously(ItemFinder.instance, Runnable {
+                    val regionContainer = File(Bukkit.getWorldContainer(), "${player.world.name}/region")
+                    RegionFileCache::class.java.getDeclaredConstructor(File::class.java)
+                        .apply { isAccessible = true }
+                        .newInstance(regionContainer)
+                        .use { cache ->
+                            val nbt = cache.read(ChunkCoordIntPair(chunkX, chunkZ))
+                                ?: return@Runnable player.sendMessage("${ChatColor.RED}Failed to load chunk")
+                            ScanChunkListener.checkChunk(worldName, nbt, sender) { item, amount, _ ->
+                                getCompareResult(item, amount) {}
+                            }
+                        }
+                })
+            }
+            "scan-all-regions" -> {
+                val player = sender as Player
+                val worldName = player.world.name
+                val regionContainer = File(Bukkit.getWorldContainer(), "${player.world.name}/region")
+                val chunkLocations = mutableListOf<ChunkCoordIntPair>()
+                val regex = Regex("^r.(-?\\d+).(-?\\d+).mca$")
+                regionContainer.listFiles()!!.forEach { file ->
+                    try {
+                        val groups = regex.find(file.name)?.groupValues ?: return@forEach
+                        val regionX = groups[1].toInt()
+                        val regionZ = groups[2].toInt()
+                        for (x in 0..31) {
+                            for (z in 0..31) {
+                                val chunkX = regionX * 32 + x
+                                val chunkZ = regionZ * 32 + z
+                                chunkLocations.add(ChunkCoordIntPair(chunkX, chunkZ))
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+                val count = AtomicInteger(0)
+                val ignoredChunks = AtomicInteger()
+                scanStatus[worldName] = Pair(chunkLocations.size, count)
+                val time = Util.getCurrentDateTimeAsString()
+                sender.sendMessage("${ChatColor.GREEN}${chunkLocations.size}個のチャンクをスキャン中です。")
+                ItemFinder.instance.logger.info("Starting scan of $worldName (${chunkLocations.size} chunks) using up to ${Runtime.getRuntime().availableProcessors()} threads")
+                val allItems = Collections.synchronizedList(mutableListOf<ItemData>())
+                val matchedItems = Collections.synchronizedList(mutableListOf<ItemData>())
+                val locations = CsvBuilder("Location", "Amount", "Type", "Item name", "Item name with color")
+                Bukkit.getScheduler().runTaskAsynchronously(ItemFinder.instance, Runnable {
+                    try {
+                        chunkLocations.split(Runtime.getRuntime().availableProcessors()).map split@ { list ->
+                            ScanChunkListener.chunkScannerExecutor.submit {
+                                RegionFileCache::class.java.getDeclaredConstructor(File::class.java)
+                                    .apply { isAccessible = true }
+                                    .newInstance(regionContainer)
+                                    .use { cache ->
+                                        list.forEach { pair ->
+                                            if (Thread.currentThread().isInterrupted) {
+                                                return@forEach
+                                            }
+                                            try {
+                                                val nbt = cache.read(ChunkCoordIntPair(pair.x, pair.z))
+                                                    ?: return@forEach ignoredChunks.set(ignoredChunks.get() + 1)
+                                                val root = nbt.getCompound("Level")
+                                                if (root.getList("TileEntities", 10).isEmpty()) {
+                                                    ignoredChunks.incrementAndGet()
+                                                    return@forEach
+                                                }
+                                                ScanChunkListener.checkChunk(
+                                                    worldName,
+                                                    nbt,
+                                                    sender
+                                                ) { item, amount, location ->
+                                                    var itemData = ItemData(item, amount.toLong())
+                                                    val result = if (args.size == 1) {
+                                                        getCompareResult(item, amount) { itemData = it }
+                                                    } else {
+                                                        val joined = args.drop(2).joinToString(" ")
+                                                        item.type.name == joined || (item.hasItemMeta() &&
+                                                                item.itemMeta?.hasDisplayName() == true &&
+                                                                ChatColor.stripColor(item.itemMeta?.displayName) == joined)
+                                                    }
+                                                    synchronized(allItems) { allItems.merge(itemData) }
+                                                    if (result) {
+                                                        synchronized(matchedItems) { matchedItems.merge(itemData) }
+                                                        locations.add(
+                                                            "${location.blockX}, ${location.blockY}, ${location.blockZ}",
+                                                            *itemData.toStringArray()
+                                                        )
+                                                    }
+                                                    return@checkChunk result
+                                                }
+                                            } catch (e: Exception) {
+                                                ItemFinder.instance.logger.severe("Failed to scan chunk ${pair.x}, ${pair.z}")
+                                                e.printStackTrace()
+                                            } finally {
+                                                count.incrementAndGet()
+                                            }
+                                        }
+                                    }
+                            }
+                        }.forEach { it.get() }
+                    } catch (e: Throwable) {
+                        e.printStackTrace()
+                    } finally {
+                        scanStatus.remove(worldName)
+                        sender.sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。${ignoredChunks.get()}/${chunkLocations.size}個のチャンクが無視されました。")
+                        showResults(sender, time, allItems.toCsv(), matchedItems.toCsv(), locations)
+                        Bukkit.getConsoleSender().sendMessage("${ChatColor.GREEN}チャンクのスキャンが完了しました。${ignoredChunks.get()}/${chunkLocations.size}個のチャンクが無視されました。")
+                        showResults(Bukkit.getConsoleSender(), time, allItems.toCsv(), matchedItems.toCsv(), locations)
+                    }
+                })
             }
             "info" -> {
                 scanStatus.forEach { (world, pair) ->
@@ -375,7 +491,7 @@ object ItemFinderCommand: TabExecutor {
                 }
             }
             "reload" -> {
-                ItemFinder.instance.config.load(File("./plugins/ItemFinder/config.yml"))
+                ItemFinder.instance.reloadConfig()
                 sender.sendMessage("${ChatColor.GREEN}設定を再読み込みしました。")
             }
             "give" -> {
@@ -398,7 +514,7 @@ object ItemFinderCommand: TabExecutor {
 
     private fun List<String>.filter(s: String): List<String> = distinct().filter { s1 -> s1.lowercase().startsWith(s.lowercase()) }
 
-    private fun showResults(sender: Player, time: String, allCsv: CsvBuilder, matchedCsv: CsvBuilder, locations: CsvBuilder? = null) {
+    private fun showResults(sender: CommandSender, time: String, allCsv: CsvBuilder, matchedCsv: CsvBuilder, locations: CsvBuilder? = null) {
         val resultsDir = File("plugins/ItemFinder/results")
         resultsDir.mkdirs()
         File(resultsDir, "$time-all.csv").writeText(allCsv.build())
@@ -421,4 +537,23 @@ object ItemFinderCommand: TabExecutor {
             sender.sendMessage("${ChatColor.GREEN}$time-all.csv, $time-matched.csv, $time-locations.csvに保存されました。")
         }
     }
+
+    private fun getCompareResult(item: ItemStack, amount: AtomicLong, itemDataSetter: (ItemData) -> Unit) =
+        ItemFinder.itemsToFind
+            .any { itemToFind ->
+                StorageBox.getStorageBox(item)?.let { box ->
+                    val component = box.componentItemStack
+                    if (component == null) {
+                        null
+                    } else {
+                        if (component.isSimilar(itemToFind) && box.amount >= itemToFind.amount) {
+                            itemDataSetter(ItemData(component, box.amount * amount.toLong()))
+                            amount.set(box.amount)
+                            true
+                        } else {
+                            null
+                        }
+                    }
+                } ?: item.isSimilar(itemToFind) && amount.get() >= itemToFind.amount
+            }
 }
