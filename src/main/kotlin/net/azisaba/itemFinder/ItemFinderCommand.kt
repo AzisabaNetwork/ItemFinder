@@ -402,6 +402,7 @@ object ItemFinderCommand: TabExecutor {
                 val allItems = Collections.synchronizedList(mutableListOf<ItemData>())
                 val matchedItems = Collections.synchronizedList(mutableListOf<ItemData>())
                 val locations = CsvBuilder("Location", "Amount", "Type", "Item name", "Item name with color")
+                val paranoid = args.size >= 2 && args[1] == "PARANOID"
                 Bukkit.getScheduler().runTaskAsynchronously(ItemFinder.instance, Runnable {
                     try {
                         chunkLocations.split(Runtime.getRuntime().availableProcessors()).map split@ { list ->
@@ -428,7 +429,7 @@ object ItemFinderCommand: TabExecutor {
                                                     sender
                                                 ) { item, amount, location ->
                                                     var itemData = ItemData(item, amount.toLong())
-                                                    val result = if (args.size == 1) {
+                                                    val result = if (args.size == 1 || paranoid) {
                                                         getCompareResult(item, amount) { itemData = it }
                                                     } else {
                                                         val joined = args.drop(2).joinToString(" ")
@@ -437,7 +438,7 @@ object ItemFinderCommand: TabExecutor {
                                                                 ChatColor.stripColor(item.itemMeta?.displayName) == joined)
                                                     }
                                                     synchronized(allItems) { allItems.merge(itemData) }
-                                                    if (result) {
+                                                    if (result || paranoid) {
                                                         synchronized(matchedItems) { matchedItems.merge(itemData) }
                                                         locations.add(
                                                             "${location.blockX}, ${location.blockY}, ${location.blockZ}",
