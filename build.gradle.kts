@@ -20,7 +20,7 @@ dependencies {
     implementation("xyz.acrylicstyle.util:kotlin:0.16.6")
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.1.0")
     compileOnly("org.spigotmc:spigot:1.15.2-R0.1-SNAPSHOT")
-    compileOnly("xyz.acrylicstyle:StorageBox:1.2.0")
+    compileOnly("xyz.acrylicstyle:StorageBox:1.5.5")
 }
 
 tasks {

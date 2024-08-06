@@ -168,7 +168,7 @@ object ScanChunkListener : Listener {
             .forEach { tileEntity ->
                 val itemsListTag = tileEntity.getList("Items", 10)
                 if (itemsListTag.isEmpty()) return@forEach
-                val nmsItems = NonNullList.a(itemsListTag.size, net.minecraft.server.v1_15_R1.ItemStack.a)
+                val nmsItems = NonNullList.a(54, net.minecraft.server.v1_15_R1.ItemStack.a)
                 ContainerUtil.b(tileEntity, nmsItems)
                 val x = tileEntity.getInt("x")
                 val y = tileEntity.getInt("y")
