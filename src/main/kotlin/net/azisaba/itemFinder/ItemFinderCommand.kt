@@ -13,8 +13,8 @@ import net.azisaba.itemFinder.util.Util.wellRound
 import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.HoverEvent
 import net.md_5.bungee.api.chat.TextComponent
-import net.minecraft.server.v1_15_R1.ChunkCoordIntPair
-import net.minecraft.server.v1_15_R1.RegionFileCache
+import net.minecraft.world.level.ChunkPos
+import net.minecraft.world.level.chunk.storage.RegionFileStorage
 import org.bukkit.Bukkit
 import org.bukkit.ChatColor
 import org.bukkit.command.Command
@@ -432,13 +432,13 @@ object ItemFinderCommand : TabExecutor {
                     ItemFinder.instance,
                     Runnable {
                         val regionContainer = File(Bukkit.getWorldContainer(), "${player.world.name}/region")
-                        RegionFileCache::class.java
+                        RegionFileStorage::class.java
                             .getDeclaredConstructor(File::class.java)
                             .apply { isAccessible = true }
                             .newInstance(regionContainer)
                             .use { cache ->
                                 val nbt =
-                                    cache.read(ChunkCoordIntPair(chunkX, chunkZ))
+                                    cache.read(ChunkPos(chunkX, chunkZ))
                                         ?: return@Runnable player.sendMessage("${ChatColor.RED}Failed to load chunk")
                                 ScanChunkListener.checkChunk(worldName, nbt, sender) { item, amount, _ ->
                                     getCompareResult(item, amount) {}
@@ -452,7 +452,7 @@ object ItemFinderCommand : TabExecutor {
                 val player = sender as Player
                 val worldName = player.world.name
                 val regionContainer = File(Bukkit.getWorldContainer(), "${player.world.name}/region")
-                val chunkLocations = mutableListOf<ChunkCoordIntPair>()
+                val chunkLocations = mutableListOf<ChunkPos>()
                 val regex = Regex("^r.(-?\\d+).(-?\\d+).mca$")
                 regionContainer.listFiles()!!.forEach { file ->
                     try {
@@ -463,7 +463,7 @@ object ItemFinderCommand : TabExecutor {
                             for (z in 0..31) {
                                 val chunkX = regionX * 32 + x
                                 val chunkZ = regionZ * 32 + z
-                                chunkLocations.add(ChunkCoordIntPair(chunkX, chunkZ))
+                                chunkLocations.add(ChunkPos(chunkX, chunkZ))
                             }
                         }
                     } catch (_: Exception) {
@@ -489,7 +489,7 @@ object ItemFinderCommand : TabExecutor {
                                 .split(Runtime.getRuntime().availableProcessors())
                                 .map split@{ list ->
                                     ScanChunkListener.chunkScannerExecutor.submit {
-                                        RegionFileCache::class.java
+                                        RegionFileStorage::class.java
                                             .getDeclaredConstructor(File::class.java)
                                             .apply { isAccessible = true }
                                             .newInstance(regionContainer)
@@ -500,10 +500,10 @@ object ItemFinderCommand : TabExecutor {
                                                     }
                                                     try {
                                                         val nbt =
-                                                            cache.read(ChunkCoordIntPair(pair.x, pair.z))
+                                                            cache.read(ChunkPos(pair.x, pair.z))
                                                                 ?: return@forEach ignoredChunks.set(ignoredChunks.get() + 1)
-                                                        val root = nbt.getCompound("Level")
-                                                        if (root.getList("TileEntities", 10).isEmpty()) {
+                                                        val root = nbt.getCompound("Level").get()
+                                                        if (root.getList("TileEntities").isEmpty) {
                                                             ignoredChunks.incrementAndGet()
                                                             return@forEach
                                                         }

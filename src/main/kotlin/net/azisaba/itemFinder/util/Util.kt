@@ -165,6 +165,7 @@ object Util {
         { this.contents }
             .runOnMain()
             .complete()
+            .filterNotNull()
             .asIterable()
             .check()
 

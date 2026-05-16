@@ -5,14 +5,16 @@ plugins {
 }
 
 group = "net.azisaba"
-version = "2.0.2"
+version = "2.1.0"
+
+val jvmVersion = 21
 
 java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+    toolchain.languageVersion.set(JavaLanguageVersion.of(jvmVersion))
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(jvmVersion)
 }
 
 paperweight.reobfArtifactConfiguration.set(io.papermc.paperweight.userdev.ReobfArtifactConfiguration.REOBF_PRODUCTION)

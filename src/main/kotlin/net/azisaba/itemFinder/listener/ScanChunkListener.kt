@@ -9,16 +9,19 @@ import net.azisaba.itemFinder.util.Util.toHoverEvent
 import net.md_5.bungee.api.chat.ClickEvent
 import net.md_5.bungee.api.chat.HoverEvent
 import net.md_5.bungee.api.chat.TextComponent
-import net.minecraft.server.v1_15_R1.ContainerUtil
-import net.minecraft.server.v1_15_R1.NBTTagCompound
-import net.minecraft.server.v1_15_R1.NonNullList
+import net.minecraft.core.NonNullList
+import net.minecraft.nbt.CompoundTag
+import net.minecraft.util.ProblemReporter
+import net.minecraft.world.ContainerHelper
+import net.minecraft.world.level.storage.TagValueOutput
+import net.minecraft.world.level.storage.ValueOutput
 import org.bukkit.Bukkit
 import org.bukkit.ChatColor
 import org.bukkit.Chunk
 import org.bukkit.ChunkSnapshot
 import org.bukkit.Location
 import org.bukkit.command.CommandSender
-import org.bukkit.craftbukkit.v1_15_R1.inventory.CraftItemStack
+import org.bukkit.craftbukkit.inventory.CraftItemStack
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.ItemFrame
 import org.bukkit.entity.Player
@@ -46,7 +49,7 @@ object ScanChunkListener : Listener {
             ) && !ItemFinder.seen.getOrPut(e.chunk.world.name) { mutableListOf() }.contains(e.chunk.x to e.chunk.z)
         ) {
             e.chunk.entities.forEach { entity ->
-                if (entity.type == EntityType.DROPPED_ITEM) entity.remove()
+                if (entity.type == EntityType.ITEM) entity.remove()
             }
         }
         if (!enabled || e.isNewChunk) return
@@ -188,22 +191,24 @@ object ScanChunkListener : Listener {
 
     fun checkChunk(
         worldName: String,
-        chunkData: NBTTagCompound,
+        chunkData: CompoundTag,
         sender: CommandSender? = null,
         predicate: (item: ItemStack, amount: AtomicLong, location: Location) -> Boolean,
     ) {
-        val root = chunkData.getCompound("Level")
+        val root = chunkData.getCompound("Level").get()
         root
-            .getList("TileEntities", 10)
-            .filterIsInstance<NBTTagCompound>()
+            .getList("TileEntities")
+            .get()
+            .filterIsInstance<CompoundTag>()
             .forEach { tileEntity ->
-                val itemsListTag = tileEntity.getList("Items", 10)
-                if (itemsListTag.isEmpty()) return@forEach
-                val nmsItems = NonNullList.a(54, net.minecraft.server.v1_15_R1.ItemStack.a)
-                ContainerUtil.b(tileEntity, nmsItems)
-                val x = tileEntity.getInt("x")
-                val y = tileEntity.getInt("y")
-                val z = tileEntity.getInt("z")
+                val itemsListTag = tileEntity.getList("Items").get()
+                if (itemsListTag.isEmpty) return@forEach
+                val nmsItems = NonNullList.withSize(54, net.minecraft.world.item.ItemStack.EMPTY)
+                val valueOutput = TagValueOutput.createWrappingGlobal(ProblemReporter.DISCARDING, tileEntity)
+                ContainerHelper.saveAllItems(valueOutput, nmsItems)
+                val x = tileEntity.getIntOr("x", 0)
+                val y = tileEntity.getIntOr("y", 0)
+                val z = tileEntity.getIntOr("z", 0)
                 val bukkitItems = nmsItems.map { CraftItemStack.asBukkitCopy(it) }
                 bukkitItems.check().forEach { (item, origAmount) ->
                     val amount = AtomicLong(origAmount.toLong())
