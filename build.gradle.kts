@@ -43,7 +43,6 @@ tasks {
     shadowJar {
         enableAutoRelocation = true
         relocationPrefix = "net.azisaba.itemFinder.libs"
-        minimize()
     }
 
     withType<org.gradle.jvm.tasks.Jar> {
