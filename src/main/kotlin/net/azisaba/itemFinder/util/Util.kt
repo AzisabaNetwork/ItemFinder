@@ -18,37 +18,50 @@ import org.bukkit.inventory.meta.BlockStateMeta
 import util.promise.rewrite.Promise
 import util.reflect.Reflect
 import java.time.LocalDateTime
-import java.time.ZoneId
-import java.util.*
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.Base64
+import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
-import kotlin.reflect.KProperty
 
 object Util {
     private val serverVersion =
-        Bukkit.getServer().javaClass.getPackage().name.replace(".", ",").split(",")[3]
+        Bukkit
+            .getServer()
+            .javaClass
+            .getPackage()
+            .name
+            .replace(".", ",")
+            .split(",")[3]
 
-    val is1_17 = try {
-        Class.forName("net.minecraft.server.$serverVersion.Packet")
-        false
-    } catch (ex: ClassNotFoundException) {
-        true
-    }
+    val is1_17 =
+        try {
+            Class.forName("net.minecraft.server.$serverVersion.Packet")
+            false
+        } catch (ex: ClassNotFoundException) {
+            true
+        }
 
     private fun ItemStack.toNMS(): Any =
-        Class.forName("org.bukkit.craftbukkit.$serverVersion.inventory.CraftItemStack")
+        Class
+            .forName("org.bukkit.craftbukkit.$serverVersion.inventory.CraftItemStack")
             .getMethod("asNMSCopy", ItemStack::class.java)
             .invoke(null, this)
 
-    private fun n(pre_1_17: String, after_1_17: String) = if (is1_17) after_1_17 else pre_1_17
+    private fun n(
+        pre_1_17: String,
+        after_1_17: String,
+    ) = if (is1_17) after_1_17 else pre_1_17
 
-    private fun getNMSClass(clazz: NMSClass): Class<*> = Class.forName(when (clazz) {
-        NMSClass.NBTTagCompound -> n("net.minecraft.server.$serverVersion.NBTTagCompound", "net.minecraft.nbt.NBTTagCompound")
-        NMSClass.IRegistry -> n("net.minecraft.server.$serverVersion.IRegistry", "net.minecraft.core.IRegistry")
-        NMSClass.RegistryBlocks -> n("net.minecraft.server.$serverVersion.RegistryBlocks", "net.minecraft.core.RegistryBlocks")
-    })
+    private fun getNMSClass(clazz: NMSClass): Class<*> =
+        Class.forName(
+            when (clazz) {
+                NMSClass.NBTTagCompound -> n("net.minecraft.server.$serverVersion.NBTTagCompound", "net.minecraft.nbt.NBTTagCompound")
+                NMSClass.IRegistry -> n("net.minecraft.server.$serverVersion.IRegistry", "net.minecraft.core.IRegistry")
+                NMSClass.RegistryBlocks -> n("net.minecraft.server.$serverVersion.RegistryBlocks", "net.minecraft.core.RegistryBlocks")
+            },
+        )
 
     enum class NMSClass {
         NBTTagCompound,
@@ -60,17 +73,19 @@ object Util {
 
     fun ItemStack.toHoverEvent() =
         HoverEvent(
-            HoverEvent.Action.SHOW_ITEM, arrayOf(
+            HoverEvent.Action.SHOW_ITEM,
+            arrayOf(
                 TextComponent(
-                    this.clone()
+                    this
+                        .clone()
                         .apply { amount = 1 }
                         .toNMS()
                         .reflect()
                         .call<Any>("save", getNMSClass(NMSClass.NBTTagCompound).newInstance())
                         .get()
-                        .toString()
-                )
-            )
+                        .toString(),
+                ),
+            ),
         )
 
     fun ItemStack.toClickEvent(name: String = "@s") =
@@ -85,23 +100,41 @@ object Util {
         val itemField = getNMSClass(NMSClass.IRegistry).getField("ITEM").get(null)
         return getNMSClass(NMSClass.RegistryBlocks)
             .getMethod("getKey", Object::class.java)
-            .invoke(itemField, this.toNMS().reflect().call<Any>("getItem").get())
-            .toString()
+            .invoke(
+                itemField,
+                this
+                    .toNMS()
+                    .reflect()
+                    .call<Any>("getItem")
+                    .get(),
+            ).toString()
     }
 
     fun ItemStack.getTagAsString(): String =
-        this.toNMS().reflect().call<Any>("getTag").get().let { it?.toString() ?: "" }
+        this
+            .toNMS()
+            .reflect()
+            .call<Any>("getTag")
+            .get()
+            .let { it?.toString() ?: "" }
 
     fun <R> (() -> R).runOnMain(): Promise<R> {
         if (Bukkit.isPrimaryThread()) return Promise.resolve(this())
         return Promise.create { context ->
-            Bukkit.getScheduler().runTask(ItemFinder.instance, Runnable {
-                context.resolve(this())
-            })
+            Bukkit.getScheduler().runTask(
+                ItemFinder.instance,
+                Runnable {
+                    context.resolve(this())
+                },
+            )
         }
     }
 
-    fun ChunkSnapshot.getBlockState(x: Int, y: Int, z: Int): Promise<BlockState?> {
+    fun ChunkSnapshot.getBlockState(
+        x: Int,
+        y: Int,
+        z: Int,
+    ): Promise<BlockState?> {
         val world = Bukkit.getWorld(this.worldName) ?: return Promise.resolve(null)
         return { world.getBlockAt(this.x * 16 + x, y, this.z * 16 + z).state }.runOnMain()
     }
@@ -111,6 +144,7 @@ object Util {
     fun Double.wellRound() = (this * 100.0).roundToInt() / 100.0
 
     fun String.encodeBase64(): String = Base64.getEncoder().encodeToString(this.toByteArray())
+
     fun String.decodeBase64() = String(Base64.getDecoder().decode(this))
 
     fun InventoryHolder.check(): Map<ItemStack, Int> {
@@ -127,9 +161,12 @@ object Util {
         return this.inventory.check()
     }
 
-    fun Inventory.check(): Map<ItemStack, Int> {
-        return { this.contents }.runOnMain().complete().asIterable().check()
-    }
+    fun Inventory.check(): Map<ItemStack, Int> =
+        { this.contents }
+            .runOnMain()
+            .complete()
+            .asIterable()
+            .check()
 
     fun Iterable<ItemStack>.check(): Map<ItemStack, Int> {
         val map = mutableMapOf<ItemStack, Int>()
@@ -167,11 +204,13 @@ object Util {
         return "${date}_${time}_$zoneName"
     }
 
-    private fun padStartZero(value: Int, len: Int): String {
+    private fun padStartZero(
+        value: Int,
+        len: Int,
+    ): String {
         val str = value.toString()
         return "0".repeat(max(0, len - str.length)) + str
     }
 
-    fun <T> List<T>.split(toSize: Int): List<List<T>> =
-        chunked(ceil(size / toSize.toDouble()).toInt())
+    fun <T> List<T>.split(toSize: Int): List<List<T>> = chunked(ceil(size / toSize.toDouble()).toInt())
 }

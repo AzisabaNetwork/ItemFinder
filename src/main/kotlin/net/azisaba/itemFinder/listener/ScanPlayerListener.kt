@@ -13,10 +13,9 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.inventory.Inventory
-import org.bukkit.inventory.ItemStack
 import xyz.acrylicstyle.storageBox.utils.StorageBox
 
-object ScanPlayerListener: Listener {
+object ScanPlayerListener : Listener {
     var enabled = false
 
     @EventHandler
@@ -30,7 +29,11 @@ object ScanPlayerListener: Listener {
         check("${player.name}のエンダーチェスト", player.name, player.enderChest)
     }
 
-    private fun check(what: String, player: String, inventory: Inventory) {
+    private fun check(
+        what: String,
+        player: String,
+        inventory: Inventory,
+    ) {
         val map = inventory.check()
         ItemFinder.itemsToFind.forEach { itemStack ->
             val amount: Long =
@@ -46,7 +49,10 @@ object ScanPlayerListener: Listener {
                     ?: map.firstNotNullOfOrNull { if (it.key.isSimilar(itemStack)) it.value.toLong() else null }
                     ?: 0
             if (amount >= itemStack.amount) {
-                val text = TextComponent("${ChatColor.GOLD}[${ChatColor.WHITE}${itemStack.itemMeta?.displayName or itemStack.type.name}${ChatColor.GOLD}]${ChatColor.YELLOW}x${amount} ${ChatColor.GOLD}が${what}から見つかりました ${ChatColor.GRAY}(クリックでテレポート)")
+                val text =
+                    TextComponent(
+                        "${ChatColor.GOLD}[${ChatColor.WHITE}${itemStack.itemMeta?.displayName or itemStack.type.name}${ChatColor.GOLD}]${ChatColor.YELLOW}x$amount ${ChatColor.GOLD}が${what}から見つかりました ${ChatColor.GRAY}(クリックでテレポート)",
+                    )
                 text.hoverEvent = itemStack.toHoverEvent()
                 text.clickEvent = ClickEvent(ClickEvent.Action.RUN_COMMAND, "/tp $player")
                 Bukkit.getOnlinePlayers().filter { it.hasPermission("itemfinder.notify") }.forEach { p ->
@@ -65,6 +71,6 @@ object ScanPlayerListener: Listener {
             }
             Bukkit.getConsoleSender().spigot().sendMessage(text)
         }
-        */
+         */
     }
 }

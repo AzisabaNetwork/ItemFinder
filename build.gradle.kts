@@ -1,14 +1,26 @@
 plugins {
-    kotlin("jvm") version "1.6.10"
-    id("com.github.johnrengelman.shadow") version "6.0.0"
+    kotlin("jvm") version "2.3.21"
+    id("io.papermc.paperweight.userdev") version "2.0.0-beta.21"
+    id("com.gradleup.shadow") version "9.4.1"
 }
 
 group = "net.azisaba"
 version = "2.0.2"
 
+java {
+    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+paperweight.reobfArtifactConfiguration.set(io.papermc.paperweight.userdev.ReobfArtifactConfiguration.REOBF_PRODUCTION)
+
 repositories {
     mavenLocal()
     mavenCentral()
+    maven("https://repo.papermc.io/repository/maven-public/")
     maven { url = uri("https://repo.azisaba.net/repository/maven-public/") }
     maven { url = uri("https://repo.acrylicstyle.xyz/repository/maven-public/") }
     maven { url = uri("https://maven.enginehub.org/repo/") }
@@ -16,20 +28,19 @@ repositories {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.6.10")
+    paperweight.paperDevBundle("1.21.11-R0.1-SNAPSHOT")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.21")
     implementation("xyz.acrylicstyle.util:kotlin:0.16.6")
-    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.1.0")
-    compileOnly("org.spigotmc:spigot:1.15.2-R0.1-SNAPSHOT")
-    compileOnly("xyz.acrylicstyle:StorageBox:1.5.5")
+    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.1.0") {
+        exclude("org.bukkit", "bukkit")
+    }
+    compileOnly("xyz.acrylicstyle:StorageBox:1.6.3+1.21.11")
 }
 
 tasks {
-    compileKotlin { kotlinOptions.jvmTarget = "1.8" }
-
     shadowJar {
-        relocate("kotlin", "net.azisaba.itemFinder.libs.kotlin")
-        relocate("util", "net.azisaba.itemFinder.libs.util")
-
+        enableAutoRelocation = true
+        relocationPrefix = "net.azisaba.itemFinder.libs"
         minimize()
     }
 

@@ -8,7 +8,7 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
 
-class ItemFinder: JavaPlugin() {
+class ItemFinder : JavaPlugin() {
     companion object {
         lateinit var instance: ItemFinder
         val itemsToFind = mutableListOf<ItemStack>()
@@ -30,12 +30,19 @@ class ItemFinder: JavaPlugin() {
         server.pluginManager.registerEvents(ScanPlayerListener, this)
         config.getList("itemsToFind")?.forEach { any ->
             when (any) {
-                is ItemStack -> itemsToFind.add(any)
-                is ConfigurationSection -> itemsToFind.add(ItemStack.deserialize(any.getValues(true)))
+                is ItemStack -> {
+                    itemsToFind.add(any)
+                }
+
+                is ConfigurationSection -> {
+                    itemsToFind.add(ItemStack.deserialize(any.getValues(true)))
+                }
+
                 is Map<*, *> -> {
                     @Suppress("UNCHECKED_CAST")
                     itemsToFind.add(ItemStack.deserialize(any as MutableMap<String, Any>))
                 }
+
                 else -> {
                     if (any == null) {
                         logger.warning("[Config] Don't know how to deserialize null @ itemsToFind")
@@ -48,16 +55,18 @@ class ItemFinder: JavaPlugin() {
         config.getList("seen")?.forEach { any ->
             try {
                 val addToSeen = { map: Map<*, *> ->
-                    map.forEach e@ { (k, v) ->
+                    map.forEach e@{ (k, v) ->
                         if (v !is List<*>) {
                             logger.warning("[Config] Don't know how to deserialize $v @ seen>addToSeen")
                             return@e
                         }
                         try {
-                            seen[k.toString()] = v.map {
-                                val sp = v.toString().split(',')
-                                Pair(sp[0].toInt(), sp[1].toInt())
-                            }.toMutableList()
+                            seen[k.toString()] =
+                                v
+                                    .map {
+                                        val sp = v.toString().split(',')
+                                        Pair(sp[0].toInt(), sp[1].toInt())
+                                    }.toMutableList()
                         } catch (e: RuntimeException) {
                             logger.warning("[Config] Don't know how to deserialize $v @ seen>addToSeen>map")
                             e.printStackTrace()
@@ -81,7 +90,7 @@ class ItemFinder: JavaPlugin() {
         ScanChunkListener.chunkScannerExecutor.shutdownNow()
         logger.info("Saving config")
         config.set("itemsToFind", itemsToFind)
-        config.set("seen", seen.mapValues { (_, v) -> v.map { (i, j) -> "${i},${j}" } })
+        config.set("seen", seen.mapValues { (_, v) -> v.map { (i, j) -> "$i,$j" } })
         saveConfig()
     }
 }

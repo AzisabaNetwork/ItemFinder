@@ -1,6 +1,6 @@
 name: ItemFinder
 main: net.azisaba.itemFinder.ItemFinder
-version: 2.0.0
+version: @version@
 api-version: 1.15
 depend:
   - StorageBox
