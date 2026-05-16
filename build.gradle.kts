@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.azisaba"
-version = "2.1.0"
+version = "2.1.1"
 
 val jvmVersion = 21
 
@@ -47,5 +47,27 @@ tasks {
 
     withType<org.gradle.jvm.tasks.Jar> {
         archiveFileName.set("ItemFinder-${archiveVersion.get()}.jar")
+    }
+
+    processResources {
+        from(
+            sourceSets.main
+                .get()
+                .resources.srcDirs,
+        ) {
+            include("**")
+            val tokenReplacementMap =
+                mapOf(
+                    "version" to project.version,
+                )
+            filter<org.apache.tools.ant.filters.ReplaceTokens>("tokens" to tokenReplacementMap)
+        }
+        filteringCharset = "UTF-8"
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        from(projectDir) { include("LICENSE") }
+    }
+
+    compileJava {
+        options.encoding = "UTF-8"
     }
 }
