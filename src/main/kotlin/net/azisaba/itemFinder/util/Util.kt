@@ -27,13 +27,19 @@ import kotlin.math.roundToInt
 
 object Util {
     private val serverVersion =
-        Bukkit
-            .getServer()
-            .javaClass
-            .getPackage()
-            .name
-            .replace(".", ",")
-            .split(",")[3]
+        when (Bukkit.getBukkitVersion()) {
+            "1.21.11-R0.1-SNAPSHOT" -> {
+                "v1_21_R1"
+            }
+
+            else -> {
+                Bukkit
+                    .getBukkitVersion()
+                    .split("-")[0]
+                    .replace(".", "_")
+                    .let { "v$it" }
+            }
+        }
 
     val is1_17 =
         try {
